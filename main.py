@@ -2,6 +2,7 @@ import json
 import os
 
 from dotenv import load_dotenv
+from fastapi import FastAPI
 from openai import OpenAI
 
 load_dotenv()
@@ -43,6 +44,14 @@ def suggest_replacement(dish_name: str) -> dict:
     result = json.loads(response.choices[0].message.content)
     result["calorie_diff"] = result["original_calories"] - result["replacement_calories"]
     return result
+
+
+app = FastAPI()
+
+
+@app.get("/suggest")
+def suggest(dish_name: str):
+    return suggest_replacement(dish_name)
 
 
 if __name__ == "__main__":
