@@ -3,6 +3,7 @@ import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 
 load_dotenv()
@@ -52,6 +53,9 @@ app = FastAPI()
 @app.get("/suggest")
 def suggest(dish_name: str):
     return suggest_replacement(dish_name)
+
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
 if __name__ == "__main__":

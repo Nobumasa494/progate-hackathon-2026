@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>置き換えダイエット - 機能1</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 20px; }
+  .input-row { display: flex; gap: 8px; margin-bottom: 20px; }
+  input { flex: 1; padding: 8px; font-size: 14px; }
+  button { padding: 8px 16px; font-size: 14px; cursor: pointer; }
+  #result { white-space: pre-wrap; background: #f4f4f4; padding: 12px; border-radius: 8px; }
+  .loading { color: #888; }
+</style>
+</head>
+<body>
+  <h1>食べたい料理名を入力してください</h1>
+  <div class="input-row">
+    <input id="dish-name" type="text" placeholder="例: ラーメン">
+    <button id="submit-btn">提案してもらう</button>
+  </div>
+  <div id="result"></div>
+
+  <script>
+    const input = document.getElementById("dish-name");
+    const button = document.getElementById("submit-btn");
+    const result = document.getElementById("result");
+
+    async function suggest() {
+      const dishName = input.value.trim();
+      if (!dishName) return;
+
+      result.textContent = "考え中...";
+      result.className = "loading";
+      button.disabled = true;
+
+      try {
+        const res = await fetch("/suggest?dish_name=" + encodeURIComponent(dishName));
+        const data = await res.json();
+        result.className = "";
+        result.textContent =
+          `${data.original_dish}(${data.original_calories}kcal) の代わりに\n\n` +
+          `${data.replacement_name}(${data.replacement_calories}kcal)\n\n` +
+          `材料:\n${data.ingredients.map(i => `- ${i.name} ${i.amount}`).join("\n")}\n\n` +
+          `作り方:\n${data.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\n` +
+          `削減カロリー: ${data.calorie_diff}kcal / 材料費目安: ${data.estimated_cost_yen}円`;
+      } catch (e) {
+        result.className = "";
+        result.textContent = "エラーが発生しました。もう一度試してください。";
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    button.addEventListener("click", suggest);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") suggest();
+    });
+  </script>
+</body>
+</html>
