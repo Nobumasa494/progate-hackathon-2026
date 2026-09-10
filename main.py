@@ -1,3 +1,4 @@
+
 import json
 import os
 
@@ -61,3 +62,4 @@ app.mount("/", StaticFiles(directory="static", html=True), name="static")
 if __name__ == "__main__":
     result = suggest_replacement("ラーメン")
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
