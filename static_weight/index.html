@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>体重管理</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 20px; }
+  .input-row { display: flex; gap: 8px; margin-bottom: 20px; }
+  input { flex: 1; padding: 8px; font-size: 14px; }
+  button { padding: 8px 16px; font-size: 14px; cursor: pointer; }
+  .chart-box { position: relative; height: 300px; }
+</style>
+</head>
+<body>
+  <h1>今日の体重を記録</h1>
+  <div class="input-row">
+    <input id="weight-input" type="number" step="0.1" placeholder="例: 65.0">
+    <button id="record-btn">記録する</button>
+  </div>
+  <div class="chart-box">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <script>
+    const userId = "00000000-0000-0000-0000-000000000001"; // 動作確認用の仮ID
+    const input = document.getElementById("weight-input");
+    const button = document.getElementById("record-btn");
+    let chart;
+
+    async function loadChart() {
+      const res = await fetch(`/weight?user_id=${userId}`);
+      const logs = await res.json();
+      const labels = logs.map(l => `${l.id}回目`);
+      const data = logs.map(l => l.weight_kg);
+
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById("chart"), {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{ label: "体重(kg)", data, borderColor: "steelblue", backgroundColor: "steelblue", borderWidth: 3 }],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { usePointStyle: true, pointStyle: "line" } } },
+        },
+      });
+    }
+
+    async function record() {
+      const weight = parseFloat(input.value);
+      if (!weight) return;
+      await fetch(`/weight?user_id=${userId}&weight_kg=${weight}`, { method: "POST" });
+      input.value = "";
+      loadChart();
+    }
+
+    button.addEventListener("click", record);
+    loadChart();
+  </script>
+</body>
+</html>
