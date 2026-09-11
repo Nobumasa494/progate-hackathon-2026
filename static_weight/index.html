@@ -18,6 +18,7 @@
   <div class="input-row">
     <input id="weight-input" type="number" step="0.1" placeholder="例: 65.0">
     <button id="record-btn">記録する</button>
+    <button id="delete-btn">最新の記録を削除</button>
   </div>
   <div class="chart-box">
     <canvas id="chart"></canvas>
@@ -27,12 +28,13 @@
     const userId = "00000000-0000-0000-0000-000000000001"; // 動作確認用の仮ID
     const input = document.getElementById("weight-input");
     const button = document.getElementById("record-btn");
+    const deleteButton = document.getElementById("delete-btn");
     let chart;
 
     async function loadChart() {
       const res = await fetch(`/weight?user_id=${userId}`);
       const logs = await res.json();
-      const labels = logs.map(l => `${l.id}回目`);
+      const labels = logs.map(l => new Date(l.created_at).toLocaleDateString());
       const data = logs.map(l => l.weight_kg);
 
       if (chart) chart.destroy();
@@ -57,7 +59,13 @@
       loadChart();
     }
 
+    async function deleteLatest() {
+      await fetch(`/weight/latest?user_id=${userId}`, { method: "DELETE" });
+      loadChart();
+    }
+
     button.addEventListener("click", record);
+    deleteButton.addEventListener("click", deleteLatest);
     loadChart();
   </script>
 </body>
