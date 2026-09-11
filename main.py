@@ -1,10 +1,8 @@
-
 import json
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from flask import Flask, jsonify, request
 from openai import OpenAI
 
 load_dotenv()
@@ -48,18 +46,19 @@ def suggest_replacement(dish_name: str) -> dict:
     return result
 
 
-app = FastAPI()
+app = Flask(__name__, static_folder="static", static_url_path="")
 
 
-@app.get("/suggest")
-def suggest(dish_name: str):
-    return suggest_replacement(dish_name)
+@app.route("/")
+def index():
+    return app.send_static_file("index.html")
 
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+@app.route("/suggest", methods=["GET"])
+def suggest():
+    dish_name = request.args.get("dish_name")
+    return jsonify(suggest_replacement(dish_name))
 
 
 if __name__ == "__main__":
-    result = suggest_replacement("ラーメン")
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-
+    app.run(host="127.0.0.1", port=8000, debug=True)
