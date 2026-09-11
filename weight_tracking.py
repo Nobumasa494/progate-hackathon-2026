@@ -31,6 +31,14 @@ def get_weight_logs(user_id: str) -> list[dict]:
     return response.data
 
 
+def delete_latest_weight_log(user_id: str) -> None:
+    logs = get_weight_logs(user_id)
+    if not logs:
+        return
+    latest_id = logs[-1]["id"]
+    supabase.table("weight_logs").delete().eq("id", latest_id).execute()
+
+
 app = FastAPI()
 
 
@@ -43,6 +51,12 @@ def record_weight(user_id: str, weight_kg: float):
 @app.get("/weight")
 def list_weight(user_id: str):
     return get_weight_logs(user_id)
+
+
+@app.delete("/weight/latest")
+def delete_latest_weight(user_id: str):
+    delete_latest_weight_log(user_id)
+    return {"status": "ok"}
 
 
 app.mount("/", StaticFiles(directory="static_weight", html=True), name="static")
