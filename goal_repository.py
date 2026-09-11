@@ -30,6 +30,7 @@ except ImportError:
 from supabase import Client, create_client
 
 from target_calculation import enrich_goal
+from weight_repository import get_latest_weight
 
 
 def _load_env() -> None:
@@ -69,7 +70,7 @@ def fetch_latest_goal(
 
     Supabaseへのクエリ内容:
         1. goalsテーブルから user_id が一致する行を探す
-        2. created_at（作成日時）の降順でソート（新しい順）
+        2. id（連番）の降順でソート（新しい順。テーブルに作成日時の列が無いため）
         3. 先頭1件だけ取得
     """
     client = client or get_client()
@@ -77,7 +78,7 @@ def fetch_latest_goal(
         client.table("goals")          # goalsテーブルを指定
         .select("*")                   # 全カラムを取得
         .eq("user_id", user_id)        # user_idが一致する行だけ
-        .order("created_at", desc=True)  # 新しい順にソート
+        .order("id", desc=True)        # 新しい順にソート
         .limit(1)                      # 1件だけ取得
         .execute()                     # クエリを実行
     )
@@ -92,12 +93,34 @@ def get_latest_goal_with_daily_reduction(
 
     処理の流れ:
         1. fetch_latest_goal でSupabaseから最新の目標を取得
-        2. enrich_goal で target_daily_reduction_kcal を計算して追加
+        2. weight_logs の最新体重で current_weight_kg を上書きする
+           （goalsテーブルの値は「目標設定時点」のスナップショットのまま残す。
+           計算には常に最新の体重を使うことで、体重が変わるたびに
+           target_daily_reduction_kcal も自動でズレ直す）
+        3. enrich_goal で target_daily_reduction_kcal 等を計算して追加
+
+    期日切れ（target_dateが過去）の場合は例外にせず、
+    target_daily_reduction_kcal=None・expired=True を付けて返す。
     """
     goal = fetch_latest_goal(user_id, client)
     if goal is None:
         return None  # 目標がなければNoneを返す
-    return enrich_goal(goal)  # 計算結果を付与して返す
+
+    latest_weight = get_latest_weight(user_id, client)
+    calc_input = dict(goal)
+    if latest_weight is not None:
+        calc_input["current_weight_kg"] = latest_weight
+
+    try:
+        return enrich_goal(calc_input)
+    except ValueError:
+        # 期日切れ: 計算できないが、goal自体は返す
+        result = dict(calc_input)
+        result["target_daily_reduction_kcal"] = None
+        result["total_remaining_kcal"] = None
+        result["is_unsafe_pace"] = False
+        result["expired"] = True
+        return result
 
 
 def insert_goal(

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>食事ログ記録 - 置き換えダイエット</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  .suggest-card{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--logs-bg);border:1px solid var(--logs);border-radius:16px;padding:18px 22px;margin-bottom:26px;}
+  .suggest-name{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:19px;color:var(--logs);}
+  .suggest-tag{font-size:12px;color:var(--ink-dim);margin-top:4px;}
+  .suggest-kcal{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:22px;color:var(--logs);}
+  .label{font-size:13px;color:var(--ink-dim);margin-bottom:10px;font-weight:700;}
+  .choices{display:flex;gap:10px;margin-bottom:20px;}
+  .choice{flex:1;text-align:center;padding:16px;border-radius:14px;font-weight:700;font-size:14px;cursor:pointer;background:var(--surface-2);color:var(--ink-dim);}
+  .choice.active{background:var(--logs);color:#fff;}
+  .confirm{background:var(--goal-bg);border:1px solid var(--goal);border-radius:14px;padding:16px 20px;color:var(--goal);font-weight:700;font-size:14px;margin-top:20px;display:none;}
+  .confirm.show{display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="navbar" id="nav"></div>
+
+  <div class="eyebrow" style="color:var(--logs)">食事ログ</div>
+  <h1>実際に食べましたか?</h1>
+  <p class="sub">最新の提案をもとに、実際に食べた内容を記録します</p>
+
+  <div id="suggest-area"><p class="loading">最新の提案を読み込み中...</p></div>
+
+  <div class="card" id="form-area" style="display:none;">
+    <div class="label">実際はどうでしたか?</div>
+    <div class="choices">
+      <div class="choice active" id="choice-replaced">置き換えた</div>
+      <div class="choice" id="choice-kept">我慢して元のを食べた</div>
+    </div>
+    <div class="label">実際に食べたカロリー</div>
+    <input class="input" id="actual-cal" type="number" style="max-width:160px;">
+    <br><br>
+    <button class="btn" id="record-btn" style="background:var(--logs);color:#fff;">記録する</button>
+    <div class="confirm" id="confirm"></div>
+  </div>
+</div>
+
+<script src="nav.js"></script>
+<script>
+renderNav("logs");
+
+let suggestion = null;
+
+async function loadSuggestion() {
+  const area = document.getElementById("suggest-area");
+  try {
+    const res = await fetch("/suggestions/latest?user_id=" + encodeURIComponent(USER_ID));
+    if (!res.ok) {
+      area.innerHTML = `<p class="error">まだ提案がありません。まず<a href="/">レシピ提案画面</a>で料理を検索してください。</p>`;
+      return;
+    }
+    suggestion = await res.json();
+    area.innerHTML = `
+      <div class="suggest-card">
+        <div>
+          <div class="suggest-name">${suggestion.suggested_replacement_name}</div>
+          <div class="suggest-tag">元の提案: ${suggestion.dish_name}(${suggestion.original_calories}kcal)</div>
+        </div>
+        <div class="suggest-kcal">${suggestion.replacement_calories}kcal</div>
+      </div>
+      <div class="card" style="margin-bottom:26px;">
+        <h3 class="sec" style="margin-top:0;">材料</h3>
+        <ul>${suggestion.ingredients.map(i => `<li>${i.name} ${i.amount}</li>`).join("")}</ul>
+        <h3 class="sec">作り方</h3>
+        <ol>${suggestion.steps.map(s => `<li>${s}</li>`).join("")}</ol>
+      </div>
+    `;
+    document.getElementById("form-area").style.display = "block";
+    document.getElementById("actual-cal").value = suggestion.replacement_calories;
+  } catch (e) {
+    area.innerHTML = `<p class="error">読み込みに失敗しました。</p>`;
+  }
+}
+
+const choiceReplaced = document.getElementById("choice-replaced");
+const choiceKept = document.getElementById("choice-kept");
+const actualCal = document.getElementById("actual-cal");
+
+choiceReplaced.addEventListener("click", () => {
+  choiceReplaced.classList.add("active"); choiceKept.classList.remove("active");
+  if (suggestion) actualCal.value = suggestion.replacement_calories;
+});
+choiceKept.addEventListener("click", () => {
+  choiceKept.classList.add("active"); choiceReplaced.classList.remove("active");
+  if (suggestion) actualCal.value = suggestion.original_calories;
+});
+
+document.getElementById("record-btn").addEventListener("click", async () => {
+  if (!suggestion) return;
+  const didReplace = choiceReplaced.classList.contains("active");
+  const body = {
+    user_id: USER_ID,
+    dish_name: suggestion.dish_name,
+    suggested_replacement_name: suggestion.suggested_replacement_name,
+    original_calories: suggestion.original_calories,
+    replacement_calories: suggestion.replacement_calories,
+    did_replace: didReplace,
+    actual_calories: Number(actualCal.value),
+  };
+  const res = await fetch("/meal_logs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const confirmEl = document.getElementById("confirm");
+  if (res.ok) {
+    const summaryRes = await fetch("/meal_logs/weekly-summary?user_id=" + encodeURIComponent(USER_ID));
+    const summary = await summaryRes.json();
+    const thisWeek = summary[0] ? summary[0].total_saved_kcal : 0;
+    confirmEl.textContent = `記録しました。今週の削減: ${thisWeek}kcal`;
+  } else {
+    confirmEl.textContent = "記録に失敗しました。";
+  }
+  confirmEl.classList.add("show");
+});
+
+loadSuggestion();
+</script>
+</body>
+</html>

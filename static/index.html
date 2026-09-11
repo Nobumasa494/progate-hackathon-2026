@@ -2,60 +2,91 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>置き換えダイエット - 機能1</title>
-<style>
-  body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 16px; }
-  h1 { font-size: 20px; }
-  .input-row { display: flex; gap: 8px; margin-bottom: 20px; }
-  input { flex: 1; padding: 8px; font-size: 14px; }
-  button { padding: 8px 16px; font-size: 14px; cursor: pointer; }
-  #result { white-space: pre-wrap; background: #f4f4f4; padding: 12px; border-radius: 8px; }
-  .loading { color: #888; }
-</style>
+<title>レシピ提案 - 置き換えダイエット</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="wrap">
+  <div class="navbar" id="nav"></div>
+
+  <div class="eyebrow" style="color:var(--recipe)">AI置き換え提案</div>
   <h1>食べたい料理名を入力してください</h1>
-  <div class="input-row">
-    <input id="dish-name" type="text" placeholder="例: ラーメン">
-    <button id="submit-btn">提案してもらう</button>
+  <p class="sub">カロリーを抑えた置き換えレシピを、あなたの目標に合わせてAIが提案します</p>
+
+  <div class="inputrow">
+    <input class="input" id="dish-input" type="text" placeholder="例: かつ丼">
+    <button class="btn" id="submit-btn" style="background:var(--recipe);color:#fff;">提案してもらう</button>
   </div>
+
   <div id="result"></div>
+</div>
 
-  <script>
-    const input = document.getElementById("dish-name");
-    const button = document.getElementById("submit-btn");
-    const result = document.getElementById("result");
+<script src="nav.js"></script>
+<script>
+renderNav("recipe");
 
-    async function suggest() {
-      const dishName = input.value.trim();
-      if (!dishName) return;
+const input = document.getElementById("dish-input");
+const button = document.getElementById("submit-btn");
+const result = document.getElementById("result");
 
-      result.textContent = "考え中...";
-      result.className = "loading";
-      button.disabled = true;
+function renderCard(data) {
+  const cappedNote = data.is_capped
+    ? `<div class="note" style="background:var(--warn-bg);border-color:var(--warn);color:var(--warn);">
+         本来は1日${Math.round(data.target_daily_reduction_kcal_used ? data.target_daily_reduction_kcal_used : 0)}kcal以上の削減が必要なペースですが、
+         健康のため安全な範囲(${data.target_daily_reduction_kcal_used}kcal相当)で提案しています。
+       </div>`
+    : "";
 
-      try {
-        const res = await fetch("/suggest?dish_name=" + encodeURIComponent(dishName));
-        const data = await res.json();
-        result.className = "";
-        result.textContent =
-          `${data.original_dish}(${data.original_calories}kcal) の代わりに\n\n` +
-          `${data.replacement_name}(${data.replacement_calories}kcal)\n\n` +
-          `材料:\n${data.ingredients.map(i => `- ${i.name} ${i.amount}`).join("\n")}\n\n` +
-          `作り方:\n${data.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\n` +
-          `削減カロリー: ${data.calorie_diff}kcal / 材料費目安: ${data.estimated_cost_yen}円`;
-      } catch (e) {
-        result.className = "";
-        result.textContent = "エラーが発生しました。もう一度試してください。";
-      } finally {
-        button.disabled = false;
-      }
-    }
+  result.innerHTML = `
+    <div class="card">
+      <div class="sub" style="margin-bottom:2px;">${data.original_dish}(${data.original_calories}kcal) の代わりに</div>
+      <div style="font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:22px;color:var(--recipe);margin:2px 0 2px;">${data.replacement_name}</div>
+      <div class="sub" style="margin-bottom:18px;">${data.replacement_calories}kcal</div>
 
-    button.addEventListener("click", suggest);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") suggest();
-    });
-  </script>
+      <h3 class="sec">材料</h3>
+      <ul>${data.ingredients.map(i => `<li>${i.name} ${i.amount}</li>`).join("")}</ul>
+
+      <h3 class="sec">作り方</h3>
+      <ol>${data.steps.map(s => `<li>${s}</li>`).join("")}</ol>
+
+      <div class="statrow">
+        <div class="stat" style="background:var(--recipe-bg);"><div class="k">削減カロリー</div><div class="v" style="color:var(--recipe);">${data.calorie_diff}kcal</div></div>
+        <div class="stat" style="background:var(--recipe-bg);"><div class="k">材料費目安</div><div class="v" style="color:var(--recipe);">${data.estimated_cost_yen}円</div></div>
+      </div>
+
+      ${cappedNote}
+
+      <div class="note" style="background:var(--logs-bg);border-color:var(--logs);color:var(--logs);">
+        この提案はあなたの最新の提案として保存されました。<a href="/record">食事ログ画面</a>から記録できます。
+      </div>
+    </div>
+  `;
+}
+
+async function suggest() {
+  const dishName = input.value.trim();
+  if (!dishName) return;
+
+  result.innerHTML = `<p class="loading">考え中...</p>`;
+  button.disabled = true;
+
+  try {
+    const url = "/suggest?dish_name=" + encodeURIComponent(dishName) + "&user_id=" + encodeURIComponent(USER_ID);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("failed");
+    const data = await res.json();
+    renderCard(data);
+  } catch (e) {
+    result.innerHTML = `<p class="error">エラーが発生しました。もう一度試してください。</p>`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+button.addEventListener("click", suggest);
+input.addEventListener("keydown", (e) => { if (e.key === "Enter") suggest(); });
+</script>
 </body>
 </html>
