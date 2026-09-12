@@ -10,39 +10,121 @@
 
 from __future__ import annotations
 
-from flask import Flask, jsonify, request
+import os
+from functools import wraps
 
+from flask import Flask, jsonify, redirect, request, session
+
+import auth_service
 import goal_repository
 import latest_suggestions
 import meal_logs_repository
 import recipe_service
 import weight_repository
 
-# 認証機能がまだ無いため、ローカル検証用の固定ユーザーIDを既定値にする
-DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001"
-
 app = Flask(__name__, static_folder="static", static_url_path="")
+app.secret_key = os.environ["FLASK_SECRET_KEY"]
+
+
+def require_login_page(view):
+    """画面(HTML)用: ログインしていなければ /login に飛ばす。"""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect("/login")
+        return view(*args, **kwargs)
+    return wrapper
+
+
+def require_login_api(view):
+    """API用: ログインしていなければ401を返す。"""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return jsonify({"error": "ログインが必要です"}), 401
+        return view(*args, **kwargs)
+    return wrapper
+
+
+# ---------------------------------------------------------------------------
+# 認証(サインアップ・ログイン・ログアウト)
+# ---------------------------------------------------------------------------
+@app.route("/signup", methods=["GET"])
+def page_signup():
+    return app.send_static_file("signup.html")
+
+
+@app.route("/signup", methods=["POST"])
+def signup():
+    data = request.get_json(silent=True) or {}
+    email = data.get("email")
+    password = data.get("password")
+    if not email or not password:
+        return jsonify({"error": "email と password が必要です"}), 400
+
+    try:
+        user = auth_service.sign_up(email, password)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    if user is None:
+        return jsonify({"error": "登録に失敗しました"}), 400
+
+    session["user_id"] = user.id
+    return jsonify({"status": "ok"}), 201
+
+
+@app.route("/login", methods=["GET"])
+def page_login():
+    return app.send_static_file("login.html")
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json(silent=True) or {}
+    email = data.get("email")
+    password = data.get("password")
+    if not email or not password:
+        return jsonify({"error": "email と password が必要です"}), 400
+
+    try:
+        user = auth_service.sign_in(email, password)
+    except Exception:
+        return jsonify({"error": "メールアドレスまたはパスワードが違います"}), 401
+
+    session["user_id"] = user.id
+    return jsonify({"status": "ok"})
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return jsonify({"status": "ok"})
 
 
 # ---------------------------------------------------------------------------
 # 画面(HTML)
 # ---------------------------------------------------------------------------
 @app.route("/")
+@require_login_page
 def page_recipe():
     return app.send_static_file("index.html")
 
 
 @app.route("/record")
+@require_login_page
 def page_record():
     return app.send_static_file("record.html")
 
 
 @app.route("/goals")
+@require_login_page
 def page_goals():
     return app.send_static_file("goals.html")
 
 
 @app.route("/weight-log")
+@require_login_page
 def page_weight():
     return app.send_static_file("weight.html")
 
@@ -51,9 +133,10 @@ def page_weight():
 # 機能1: レシピ提案
 # ---------------------------------------------------------------------------
 @app.route("/suggest", methods=["GET"])
+@require_login_api
 def suggest():
     dish_name = request.args.get("dish_name")
-    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
     if not dish_name:
         return jsonify({"error": "dish_name が必要です"}), 400
 
@@ -80,8 +163,9 @@ def suggest():
 
 
 @app.route("/suggestions/latest", methods=["GET"])
+@require_login_api
 def suggestions_latest():
-    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
     suggestion = latest_suggestions.get_latest_suggestion(user_id)
     if suggestion is None:
         return jsonify({"error": "まだ提案がありません"}), 404
@@ -92,6 +176,7 @@ def suggestions_latest():
 # 機能2: 食事ログ
 # ---------------------------------------------------------------------------
 @app.route("/meal_logs", methods=["POST"])
+@require_login_api
 def create_meal_log():
     data = request.get_json(silent=True) or {}
     required = [
@@ -105,7 +190,7 @@ def create_meal_log():
     if missing:
         return jsonify({"error": f"不足しているフィールド: {missing}"}), 400
 
-    user_id = data.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
 
     # 記録した時点でアクティブな目標のIDを一緒に保存しておく（目標ごとの進捗集計に使う）
     current_goal = goal_repository.fetch_latest_goal(user_id)
@@ -125,20 +210,23 @@ def create_meal_log():
 
 
 @app.route("/meal_logs", methods=["GET"])
+@require_login_api
 def list_meal_logs():
-    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
     logs = meal_logs_repository.fetch_logs(user_id)
     return jsonify(logs)
 
 
 @app.route("/meal_logs/weekly-summary", methods=["GET"])
+@require_login_api
 def meal_logs_weekly_summary():
-    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
     summary = meal_logs_repository.fetch_weekly_summary(user_id)
     return jsonify(summary)
 
 
 @app.route("/progress", methods=["GET"])
+@require_login_api
 def get_progress():
     """目標ごとの進捗(機能連携 設計書 10章)。
 
@@ -146,7 +234,7 @@ def get_progress():
     all_time_saved_kcal    : 目標が変わっても関係ない、通算の削減合計
     remaining_kcal         : 今の目標まであといくつ削減が必要か(体重ではなく食事ログの実績ベース)
     """
-    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
     current_goal = goal_repository.fetch_latest_goal(user_id)  # 生データ(体重は目標作成時点で固定)
     current_goal_id = current_goal["id"] if current_goal else None
 
@@ -171,8 +259,9 @@ def get_progress():
 # 機能3: 目標
 # ---------------------------------------------------------------------------
 @app.route("/goals/latest", methods=["GET"])
+@require_login_api
 def get_latest_goal():
-    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
     goal = goal_repository.get_latest_goal_with_daily_reduction(user_id)
     if goal is None:
         return jsonify({"error": "Goal not found"}), 404
@@ -180,6 +269,7 @@ def get_latest_goal():
 
 
 @app.route("/goals", methods=["POST"])
+@require_login_api
 def create_goal():
     data = request.get_json(silent=True) or {}
     required = ["target_weight_kg", "target_date"]
@@ -187,7 +277,7 @@ def create_goal():
     if missing:
         return jsonify({"error": f"不足しているフィールド: {missing}"}), 400
 
-    user_id = data.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
 
     # 現在の体重は入力させず、体重記録(機能4)の最新値を自動で使う
     current_weight_kg = weight_repository.get_latest_weight(user_id)
@@ -209,8 +299,9 @@ def create_goal():
 # 機能4: 体重記録
 # ---------------------------------------------------------------------------
 @app.route("/weight", methods=["POST"])
+@require_login_api
 def record_weight():
-    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
     weight_kg = request.args.get("weight_kg", type=float)
     if weight_kg is None:
         return jsonify({"error": "weight_kg が必要です"}), 400
@@ -219,14 +310,16 @@ def record_weight():
 
 
 @app.route("/weight", methods=["GET"])
+@require_login_api
 def list_weight():
-    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
     return jsonify(weight_repository.get_weight_logs(user_id))
 
 
 @app.route("/weight/latest", methods=["DELETE"])
+@require_login_api
 def delete_latest_weight():
-    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    user_id = session["user_id"]
     weight_repository.delete_latest_weight_log(user_id)
     return jsonify({"status": "ok"})
 
