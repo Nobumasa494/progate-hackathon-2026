@@ -54,6 +54,7 @@ def insert_log(
     replacement_calories: int,
     did_replace: bool,
     actual_calories: int,
+    goal_id: Optional[int] = None,
     client: Optional[Client] = None,
 ) -> dict:
     """食事ログを1件追加する。calorie_diff は original - actual で自動計算する。
@@ -61,6 +62,7 @@ def insert_log(
     仕様:
         - did_replace=True（置き換えた）  → actual_calories は replacement 側の値を指定
         - did_replace=False（我慢した）    → actual_calories は original 側の値（=削減なし、差分0）を指定
+        - goal_id: 記録した時点でアクティブだった目標のID。目標ごとの進捗集計に使う（機能連携 設計書 10章参照）
     """
     client = client or get_client()
     calorie_diff = original_calories - actual_calories
@@ -76,6 +78,7 @@ def insert_log(
                 "did_replace": did_replace,
                 "actual_calories": actual_calories,
                 "calorie_diff": calorie_diff,
+                "goal_id": goal_id,
             }
         )
         .execute()
@@ -136,6 +139,29 @@ def fetch_weekly_summary(
         for week, total in sorted(weeks.items(), reverse=True)
     ]
     return summary
+
+
+def fetch_total_saved(
+    user_id: str,
+    goal_id: Optional[int] = None,
+    client: Optional[Client] = None,
+) -> int:
+    """calorie_diffの合計を返す。
+
+    goal_idを指定すると、そのIDが記録されているログだけに絞って合計する
+    （＝「今の目標だけの進捗」）。指定しなければ全期間の合計になる。
+    """
+    client = client or get_client()
+    resp = (
+        client.table("meal_logs")
+        .select("calorie_diff, goal_id")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    logs = resp.data
+    if goal_id is not None:
+        logs = [log for log in logs if log.get("goal_id") == goal_id]
+    return sum(int(log["calorie_diff"] or 0) for log in logs)
 
 
 def _week_start(created_at: str) -> str:

@@ -29,6 +29,9 @@ from typing import Optional
 # 体重1kgの増減に相当するカロリー（脂肪の熱量）
 KCAL_PER_KG = 7200
 
+# 1日あたりの削減カロリーとして安全とされる目安の上限
+MAX_SAFE_DAILY_REDUCTION_KCAL = 1000
+
 
 def parse_date(value: str) -> date:
     """日付文字列を date オブジェクトに変換する。
@@ -106,13 +109,25 @@ def enrich_goal(goal: dict, today: Optional[date] = None) -> dict:
     """
     result = dict(goal)  # 元のデータを変更しないようコピーする
 
+    current_weight_kg = float(result["current_weight_kg"])
+    target_weight_kg = float(result["target_weight_kg"])
+
     # target_daily_reduction_kcal を計算して追加
     result["target_daily_reduction_kcal"] = calc_target_daily_reduction_kcal(
-        current_weight_kg=float(result["current_weight_kg"]),
-        target_weight_kg=float(result["target_weight_kg"]),
+        current_weight_kg=current_weight_kg,
+        target_weight_kg=target_weight_kg,
         target_date=parse_date(result["target_date"]),
         today=today,
     )
+
+    # ゴールまでに合計で減らす必要があるカロリー（AIには使わない、正直に見せる用）
+    result["total_remaining_kcal"] = round(
+        (current_weight_kg - target_weight_kg) * KCAL_PER_KG, 1
+    )
+
+    # 安全とされる目安を超えるペースかどうか
+    result["is_unsafe_pace"] = result["target_daily_reduction_kcal"] > MAX_SAFE_DAILY_REDUCTION_KCAL
+
     return result
 
 
