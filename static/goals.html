@@ -70,11 +70,39 @@ function renderGoal(goal) {
       <div class="goalmeta">${goal.target_weight_kg}kgまで / ${goal.target_date}まで</div>
       <div class="statrow2">
         <div class="stat2"><div class="k">1日の目標削減</div><div class="v">${goal.target_daily_reduction_kcal}kcal</div></div>
-        <div class="stat2"><div class="k">ゴールまでの合計</div><div class="v">${goal.total_remaining_kcal}kcal</div></div>
+        <div class="stat2"><div class="k">ゴールまでの合計(体重ベース)</div><div class="v">${goal.total_remaining_kcal}kcal</div></div>
       </div>
       <div class="banner" style="${bannerStyle}">${bannerText}</div>
     </div>
+    <div class="card" id="progress-area"><p class="loading">食事ログの進捗を読み込み中...</p></div>
   `;
+  loadProgress();
+}
+
+function renderProgress(progress) {
+  const area = document.getElementById("progress-area");
+  if (!area) return;
+  const remainingText = progress.remaining_kcal === null
+    ? "-"
+    : `${Math.round(progress.remaining_kcal)}kcal`;
+  area.innerHTML = `
+    <div class="goalmeta" style="margin-bottom:14px;">食事ログの進捗(行動ベース)</div>
+    <div class="statrow2">
+      <div class="stat2"><div class="k">今の目標での削減実績</div><div class="v">${progress.current_goal_saved_kcal}kcal</div></div>
+      <div class="stat2"><div class="k">今の目標まであと</div><div class="v">${remainingText}</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--ink-dim);margin-top:12px;">通算(全期間)の削減実績: ${progress.all_time_saved_kcal}kcal</div>
+  `;
+}
+
+async function loadProgress() {
+  try {
+    const res = await fetch("/progress?user_id=" + encodeURIComponent(USER_ID));
+    if (!res.ok) return;
+    renderProgress(await res.json());
+  } catch (e) {
+    // 進捗の読み込み失敗は致命的ではないので、目標自体の表示は残す
+  }
 }
 
 async function loadGoal() {

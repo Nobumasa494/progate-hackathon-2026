@@ -106,6 +106,11 @@ def create_meal_log():
         return jsonify({"error": f"不足しているフィールド: {missing}"}), 400
 
     user_id = data.get("user_id", DEFAULT_USER_ID)
+
+    # 記録した時点でアクティブな目標のIDを一緒に保存しておく（目標ごとの進捗集計に使う）
+    current_goal = goal_repository.fetch_latest_goal(user_id)
+    goal_id = current_goal["id"] if current_goal else None
+
     log = meal_logs_repository.insert_log(
         user_id=user_id,
         dish_name=data["dish_name"],
@@ -114,6 +119,7 @@ def create_meal_log():
         replacement_calories=int(data["replacement_calories"]),
         did_replace=bool(data["did_replace"]),
         actual_calories=int(data["actual_calories"]),
+        goal_id=goal_id,
     )
     return jsonify(log), 201
 
@@ -130,6 +136,35 @@ def meal_logs_weekly_summary():
     user_id = request.args.get("user_id", DEFAULT_USER_ID)
     summary = meal_logs_repository.fetch_weekly_summary(user_id)
     return jsonify(summary)
+
+
+@app.route("/progress", methods=["GET"])
+def get_progress():
+    """目標ごとの進捗(機能連携 設計書 10章)。
+
+    current_goal_saved_kcal: 今の目標を立ててから、食事ログで削減できた合計
+    all_time_saved_kcal    : 目標が変わっても関係ない、通算の削減合計
+    remaining_kcal         : 今の目標まであといくつ削減が必要か(体重ではなく食事ログの実績ベース)
+    """
+    user_id = request.args.get("user_id", DEFAULT_USER_ID)
+    current_goal = goal_repository.fetch_latest_goal(user_id)  # 生データ(体重は目標作成時点で固定)
+    current_goal_id = current_goal["id"] if current_goal else None
+
+    saved = meal_logs_repository.fetch_total_saved(user_id, goal_id=current_goal_id)
+    all_time_saved = meal_logs_repository.fetch_total_saved(user_id)
+
+    remaining = None
+    if current_goal:
+        goal_total_kcal = (
+            float(current_goal["current_weight_kg"]) - float(current_goal["target_weight_kg"])
+        ) * 7200
+        remaining = goal_total_kcal - saved
+
+    return jsonify({
+        "current_goal_saved_kcal": saved,
+        "all_time_saved_kcal": all_time_saved,
+        "remaining_kcal": remaining,
+    })
 
 
 # ---------------------------------------------------------------------------
