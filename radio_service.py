@@ -21,8 +21,12 @@ import auth_service
 import goal_repository
 import meal_logs_repository
 import radio_episode_repository
+import radio_memory_repository
 import radio_prompt
 import voicevox_client
+import weight_repository
+
+KCAL_MILESTONE_THRESHOLDS = [1000, 5000, 10000, 20000, 50000]
 
 # 「今、裏で生成中のuser_id」を覚えておくだけの、プロセス内メモリ(latest_suggestions.pyと同じ考え方)。
 # サーバーを再起動すると消えるが、生成中かどうかの一時的な表示用なので問題ない。
@@ -58,6 +62,108 @@ def _build_events_text(user_id: str) -> str:
         lines.append("- 特に大きな出来事はない、いつも通りの1日だった")
 
     return "\n".join(lines)
+
+
+def _calculate_streak(user_id: str) -> int:
+    """直近のログから、最新を起点に連続で置き換え(did_replace=True)している件数を数える。"""
+    logs = meal_logs_repository.fetch_logs(user_id, limit=30)
+    streak = 0
+    for log in logs:
+        if not log["did_replace"]:
+            break
+        streak += 1
+    return streak
+
+
+def _ask_dj_reaction(fact_description: str) -> str:
+    """自己ベスト更新などの事実に対する、DJの一言の反応をAIに書かせる(1回だけ)。"""
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "あなたは深夜ラジオのDJ二人組です。以下の出来事に対する、DJとしての"
+                "一言の反応を1文で書いてください。説明文や前置きは不要、反応の文章だけ返してください。",
+            },
+            {"role": "user", "content": fact_description},
+        ],
+    )
+    return response.choices[0].message.content.strip()
+
+
+def _save_milestone(user_id: str, fact_description: str) -> None:
+    reaction = _ask_dj_reaction(fact_description)
+    radio_memory_repository.save_memory(
+        user_id, content=f"{fact_description}。{reaction}", importance=8, kind="milestone"
+    )
+
+
+def _check_and_save_milestones(user_id: str, profile: dict) -> None:
+    """実データと過去の自己ベストを比較し、更新していればmilestoneとして記録する。
+
+    自己ベストの値自体はuser_metadataに持たせる(favorite_thingsなどと同じ場所)。
+    判定はすべてコード側の数値比較で行い、AIには判定させない(設計書6-4章)。
+    """
+    updates: dict = {}
+
+    streak = _calculate_streak(user_id)
+    best_streak = profile.get("best_streak", 0)
+    if streak >= 2 and streak > best_streak:
+        _save_milestone(user_id, f"連勝記録を更新した(今までの最高{best_streak}日→今回{streak}日)")
+        updates["best_streak"] = streak
+
+    latest_weight = weight_repository.get_latest_weight(user_id)
+    best_weight = profile.get("best_weight")
+    if latest_weight is not None and (best_weight is None or latest_weight < best_weight):
+        if best_weight is not None:  # 初回の記録はお祝いせず、基準値として覚えるだけにする
+            _save_milestone(user_id, f"体重の自己ベストを更新した({best_weight}kg→{latest_weight}kg)")
+        updates["best_weight"] = latest_weight
+
+    total_saved = meal_logs_repository.fetch_total_saved(user_id)
+    reached_level = profile.get("kcal_milestone_level", 0)
+    for i, threshold in enumerate(KCAL_MILESTONE_THRESHOLDS):
+        if total_saved >= threshold and reached_level < i + 1:
+            _save_milestone(user_id, f"累計削減カロリーが{threshold}kcalを突破した")
+            reached_level = i + 1
+    if reached_level != profile.get("kcal_milestone_level", 0):
+        updates["kcal_milestone_level"] = reached_level
+
+    goal = goal_repository.fetch_latest_goal(user_id)
+    if goal and latest_weight is not None and latest_weight <= float(goal["target_weight_kg"]):
+        if profile.get("goal_achieved_id") != goal["id"]:
+            _save_milestone(user_id, f"目標体重{goal['target_weight_kg']}kgを達成した")
+            updates["goal_achieved_id"] = goal["id"]
+
+    if updates:
+        auth_service.update_profile(user_id, **updates)
+
+
+def _maybe_generate_reflection(user_id: str, episode_count: int) -> None:
+    """生成回数が10の倍数のときだけ、直近の記憶をもとに「最近の傾向」を1件だけ追加する。"""
+    if episode_count % 10 != 0:
+        return
+
+    memories = radio_memory_repository.fetch_recent_memories(user_id, limit=15)
+    if not memories:
+        return
+
+    memories_text = "\n".join(f"- {m['content']}" for m in memories)
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "以下は、ある人の話をしてきた深夜ラジオのDJたちの、これまでの記憶の一覧です。"
+                "これらを踏まえて、「最近の傾向」を1〜2文で振り返ってください。"
+                "説明文や前置きは不要、振り返りの文章だけ返してください。",
+            },
+            {"role": "user", "content": memories_text},
+        ],
+    )
+    reflection = response.choices[0].message.content.strip()
+    radio_memory_repository.save_memory(user_id, content=reflection, importance=9, kind="reflection")
 
 
 MAX_EPISODES_PER_DAY = 5
@@ -115,11 +221,15 @@ def generate_todays_episode(user_id: str) -> dict:
 
 
 def _generate_todays_episode(user_id: str) -> dict:
-    events_text = _build_events_text(user_id)
-    favorite_things = auth_service.get_favorite_things(user_id)
-    recent_scripts = radio_episode_repository.fetch_recent_scripts(user_id, limit=2)
+    profile = auth_service.get_profile(user_id)
+    _check_and_save_milestones(user_id, profile)
 
-    user_prompt = radio_prompt.build_user_prompt(events_text, favorite_things, recent_scripts)
+    events_text = _build_events_text(user_id)
+    favorite_things = profile.get("favorite_things", "")
+    recent_scripts = radio_episode_repository.fetch_recent_scripts(user_id, limit=2)
+    memories = radio_memory_repository.fetch_top_memories(user_id, limit=3)
+
+    user_prompt = radio_prompt.build_user_prompt(events_text, favorite_things, recent_scripts, memories)
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     response = client.chat.completions.create(
@@ -132,14 +242,22 @@ def _generate_todays_episode(user_id: str) -> dict:
     )
     script = json.loads(response.choices[0].message.content)
 
-    profile = auth_service.get_profile(user_id)
+    if script.get("highlight"):
+        radio_memory_repository.save_memory(user_id, content=script["highlight"], importance=6, kind="highlight")
+
     speaker_a = profile.get("voice_a_id", voicevox_client.DEFAULT_SPEAKER_A)
     speaker_b = profile.get("voice_b_id", voicevox_client.DEFAULT_SPEAKER_B)
     audio_bytes = voicevox_client.synthesize_script(script["lines"], speaker_a, speaker_b)
 
     script_text = "\n".join(f"{line['speaker']}: {line['text']}" for line in script["lines"])
-    return radio_episode_repository.generate_and_store_episode(
+    episode = radio_episode_repository.generate_and_store_episode(
         user_id=user_id,
         script=script_text,
         audio_bytes=audio_bytes,
     )
+
+    episode_count = profile.get("radio_episode_count", 0) + 1
+    auth_service.update_profile(user_id, radio_episode_count=episode_count)
+    _maybe_generate_reflection(user_id, episode_count)
+
+    return episode

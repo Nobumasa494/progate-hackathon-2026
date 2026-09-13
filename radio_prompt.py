@@ -57,11 +57,17 @@ g) 食材そのものの雑学(今日食べたものの原料・成分・歴史)
 出力のJSONに、始まりに使った材料を"opening_material"、終わりに使った材料を"ending_material"として
 ("trivia" | "previous_episode" | "numbers" | "favorite_thing" のいずれか)含めること。
 
+【ハイライトの記録(任意)】
+今回の台本の中に、単なる日常会話を超えて「これは覚えておく価値がある」と思える瞬間があれば、
+それを一文で"highlight"として出力すること。無ければ"highlight"はnullにする。
+「特に無ければnull」が基本で、毎回無理に何か書く必要はない。
+
 出力は必ず以下のJSON形式のみで返してください。
 {
   "trivia_genre": "a" | "b" | "c" | "d" | "e" | "f" | "g",
   "opening_material": "trivia" | "previous_episode" | "numbers" | "favorite_thing",
   "ending_material": "trivia" | "previous_episode" | "numbers" | "favorite_thing",
+  "highlight": "string または null",
   "lines": [
     {"speaker": "A", "text": "..."},
     {"speaker": "B", "text": "..."}
@@ -74,22 +80,30 @@ def build_user_prompt(
     events_text: str,
     favorite_things: str,
     recent_scripts: list[str],
+    memories: list[str] | None = None,
 ) -> str:
     """実データから、OpenAIに渡すUSER_PROMPTを組み立てる。
 
     events_text     : 「今日の出来事」の説明文(呼び出し側で組み立て済みのもの)
     favorite_things  : auth_service.get_favorite_things() の戻り値(空文字もありうる)
     recent_scripts   : radio_episode_repository.fetch_recent_scripts() の戻り値(新しい順)
+    memories         : radio_memory_repository.fetch_top_memories() の戻り値(重要度×新しさの上位)
     """
     parts = [f"今日の出来事:\n{events_text}"]
 
     if favorite_things:
         parts.append(f"本人の好きなこと:\n- {favorite_things}")
 
+    if memories:
+        memories_text = "\n".join(f"- {m}" for m in memories)
+        parts.append(f"特に覚えている思い出:\n{memories_text}")
+
     if recent_scripts:
-        # 新しい順に直近2回分まで渡す(古い話を蒸し返しすぎないよう、件数は絞る)
+        # 新しい順に直近2回分まで渡す(古い話を蒸し返しすぎないよう、件数は絞る)。
+        # 続き・変化に触れさせたいので、冒頭ではなく「終わり方(オチ)」側の直近10セリフを渡す。
         history_text = "\n\n".join(
-            f"({i + 1}回前の台本の抜粋)\n{script[:400]}" for i, script in enumerate(recent_scripts)
+            f"({i + 1}回前の台本の終わり方)\n" + "\n".join(script.split("\n")[-10:])
+            for i, script in enumerate(recent_scripts)
         )
         parts.append(f"前回までの話:\n{history_text}")
 

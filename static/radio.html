@@ -4,10 +4,66 @@
 <meta charset="UTF-8">
 <title>深夜ラジオ(実験中) - 置き換えダイエット</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <style>
-  .script-box{white-space:pre-wrap;font-size:13px;color:var(--ink-dim);max-height:260px;overflow-y:auto;background:var(--surface-2);border-radius:12px;padding:16px 18px;}
+  :root{
+    --radioA: oklch(52% 0.14 300); --radioA-bg: oklch(93% 0.05 300);
+    --radioB: oklch(52% 0.14 350); --radioB-bg: oklch(93% 0.05 350);
+    --onair: oklch(55% 0.18 25);
+  }
+  body{font-family:'Zen Kaku Gothic New',sans-serif;}
+
+  .stage{
+    position:relative;border-radius:14px;overflow:hidden;
+    background:linear-gradient(180deg, #f4f4f6 0%, #ffffff 62%, #ffffff 100%);
+    padding:22px 10px 0;
+  }
+  .stage::before,.stage::after{
+    content:"";position:absolute;top:-10%;width:55%;height:120%;
+    filter:blur(2px);opacity:0.55;pointer-events:none;
+  }
+  .stage::before{left:-10%;background:radial-gradient(closest-side, var(--radioA-bg), transparent 70%);}
+  .stage::after{right:-10%;background:radial-gradient(closest-side, var(--radioB-bg), transparent 70%);}
+  .stage-floor{position:absolute;left:0;right:0;bottom:0;height:1px;background:#e5e5ea;}
+  .dj-row{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:0;}
+  .dj-chip{display:flex;flex-direction:column;align-items:center;gap:2px;position:relative;}
+  .dj-chip.a{margin-right:-14px;}
+  .dj-chip.b{margin-left:-14px;}
+  .dj-avatar-img{width:110px;height:auto;display:block;}
+  .dj-avatar-img.face-right{transform:scaleX(-1);}
+  .dj-ground{width:70px;height:12px;border-radius:50%;background:radial-gradient(closest-side, rgba(0,0,0,0.16), transparent);margin-top:-6px;}
+  .talk-bubbles{flex:0 0 auto;color:#dcdce2;display:flex;align-items:center;margin-bottom:40px;}
+  .talk-bubbles.active{color:var(--radioA);}
+  .talk-bubbles svg{width:22px;height:22px;}
+  .talk-bubbles .b-dot{fill:var(--radioB);}
+  .talk-bubbles.active .b-dot{fill:var(--radioB);}
+  .talk-bubbles .a-dot{fill:currentColor;}
+  .talk-bubbles .dot-pulse{opacity:0.3;}
+  .talk-bubbles.active .dot-pulse{animation:dotfade 1.2s infinite;}
+  .talk-bubbles.active .dot-pulse:nth-child(2){animation-delay:.2s;}
+  .talk-bubbles.active .dot-pulse:nth-child(3){animation-delay:.4s;}
+  @keyframes dotfade{0%,100%{opacity:0.25;}50%{opacity:1;}}
+
+  .wave{display:flex;align-items:flex-end;gap:3px;height:22px;}
+  .wave span{width:3px;background:var(--radioA);border-radius:2px;height:5px;opacity:0.25;transition:opacity .3s;}
+  .wave span:nth-child(even){background:var(--radioB);}
+  .wave.playing span{opacity:1;animation:bounce 0.9s ease-in-out infinite;}
+  .wave span:nth-child(1){animation-delay:0s;} .wave span:nth-child(2){animation-delay:.1s;}
+  .wave span:nth-child(3){animation-delay:.2s;} .wave span:nth-child(4){animation-delay:.3s;}
+  .wave span:nth-child(5){animation-delay:.15s;} .wave span:nth-child(6){animation-delay:.25s;}
+  .wave span:nth-child(7){animation-delay:.05s;} .wave span:nth-child(8){animation-delay:.35s;}
+  .wave span:nth-child(9){animation-delay:.2s;} .wave span:nth-child(10){animation-delay:.1s;}
+  @keyframes bounce{0%,100%{height:5px;}50%{height:20px;}}
+
+  .onair-dot{width:8px;height:8px;border-radius:50%;background:#c8c8ce;transition:background .3s,box-shadow .3s;}
+  .onair.live .onair-dot{background:var(--onair);box-shadow:0 0 8px 1px color-mix(in oklch, var(--onair) 60%, transparent);animation:pulse 1.4s infinite;}
+  .onair.live{color:var(--onair)!important;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+  .btn-radio{background:var(--radioA);border-color:var(--radioA);color:#fff;}
+  .btn-radio:hover{background:color-mix(in oklch, var(--radioA) 85%, black);border-color:var(--radioA);color:#fff;}
 </style>
 </head>
 <body>
@@ -18,19 +74,60 @@
   <h1>あなただけの深夜ラジオ</h1>
   <p class="sub">今日の記録をもとに、2人のDJがあなたの話で盛り上がっています</p>
 
-  <div class="card">
-    <button class="btn" id="generate-btn">今日のラジオを作る</button>
-    <p id="generating" class="sub" style="display:none;margin-top:12px;">生成中です。1〜2分ほどかかります...</p>
-    <p id="limit-reached" class="sub" style="display:none;margin-top:12px;">今日の生成回数の上限に達しました。</p>
-    <p class="sub" style="margin-top:12px;">※食事ログを記録すると、上限に達していなければ自動でも生成が始まります(1日2回まで)</p>
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="onair d-inline-flex align-items-center gap-2 text-secondary small font-monospace" id="onair">
+          <span class="onair-dot"></span><span id="onair-label">STANDBY</span>
+        </span>
+        <span class="text-secondary small font-monospace">FM 89.7 深夜ラジオ</span>
+      </div>
+
+      <div class="stage mb-3">
+        <div class="dj-row">
+          <div class="dj-chip a">
+            <img class="dj-avatar-img face-right" src="images/zundamon.png" alt="DJ A">
+            <div class="dj-ground"></div>
+            <span class="badge rounded-pill text-bg-light border">DJ A</span>
+          </div>
+
+          <div class="talk-bubbles" id="talk-bubbles">
+            <svg viewBox="0 0 24 24">
+              <circle class="dot-pulse a-dot" cx="6" cy="12" r="2.4"/>
+              <circle class="dot-pulse" cx="12" cy="12" r="2.4" fill="#c8c8ce"/>
+              <circle class="dot-pulse b-dot" cx="18" cy="12" r="2.4"/>
+            </svg>
+          </div>
+
+          <div class="dj-chip b">
+            <img class="dj-avatar-img" src="images/metan.png" alt="DJ B">
+            <div class="dj-ground"></div>
+            <span class="badge rounded-pill text-bg-light border">DJ B</span>
+          </div>
+        </div>
+        <div class="stage-floor"></div>
+      </div>
+
+      <div class="wave mb-3" id="wave">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+
+      <audio id="player" controls class="w-100 mb-3"></audio>
+
+      <button class="btn btn-radio w-100 fw-bold" id="generate-btn">今日のラジオを作る</button>
+      <p id="generating" class="text-secondary small mt-2 mb-0" style="display:none;">生成中です。1〜2分ほどかかります...</p>
+      <p id="limit-reached" class="text-secondary small mt-2 mb-0" style="display:none;">今日の生成回数の上限に達しました。</p>
+      <p class="text-secondary small mt-2 mb-0">※食事ログを記録すると、上限に達していなければ自動でも生成が始まります(1日2回まで)</p>
+    </div>
   </div>
 
-  <div class="card" id="player-area" style="display:none;">
-    <h3 class="sec" style="margin-top:0;">最新のエピソード</h3>
-    <audio id="player" controls style="width:100%;margin-bottom:12px;"></audio>
-    <a id="download-link" class="btn btn-ghost" download="radio-episode.wav" style="display:inline-block;margin-bottom:16px;">この音声を保存する</a>
-    <h3 class="sec">台本</h3>
-    <div class="script-box" id="script-text"></div>
+  <div class="card shadow-sm border-0 mb-3" id="player-area" style="display:none;">
+    <div class="card-body">
+      <a id="download-link" class="btn btn-outline-secondary btn-sm mb-3" download="radio-episode.wav">この音声を保存する</a>
+      <h3 class="h6 fw-bold">台本</h3>
+      <div class="bg-light rounded p-3 small text-secondary" id="script-text" style="white-space:pre-wrap;max-height:260px;overflow-y:auto;"></div>
+    </div>
   </div>
 
   <p id="empty" class="sub" style="display:none;">まだエピソードがありません。「今日のラジオを作る」を押してください。</p>
@@ -48,6 +145,31 @@ const player = document.getElementById("player");
 const downloadLink = document.getElementById("download-link");
 const scriptText = document.getElementById("script-text");
 const emptyEl = document.getElementById("empty");
+const onairEl = document.getElementById("onair");
+const onairLabel = document.getElementById("onair-label");
+const waveEl = document.getElementById("wave");
+const talkBubblesEl = document.getElementById("talk-bubbles");
+
+function setOnAir(live, label) {
+  onairEl.classList.toggle("live", live);
+  onairLabel.textContent = label;
+}
+
+player.addEventListener("play", () => {
+  waveEl.classList.add("playing");
+  talkBubblesEl.classList.add("active");
+  setOnAir(true, "ON AIR");
+});
+player.addEventListener("pause", () => {
+  waveEl.classList.remove("playing");
+  talkBubblesEl.classList.remove("active");
+  setOnAir(false, "STANDBY");
+});
+player.addEventListener("ended", () => {
+  waveEl.classList.remove("playing");
+  talkBubblesEl.classList.remove("active");
+  setOnAir(false, "STANDBY");
+});
 
 async function loadLatest() {
   const res = await fetch("/radio/latest");
@@ -64,15 +186,26 @@ async function loadLatest() {
   scriptText.textContent = data.episode.script;
 }
 
+// 今日もう出来ているかどうかで、ボタンの役割を切り替える。
+// 無ければ「作る」(押すと生成)、あれば「聴く」(押すとプレイヤーまでスクロールするだけ)。
+let hasEpisodeToday = false;
+
 generateBtn.addEventListener("click", async () => {
+  if (hasEpisodeToday) {
+    playerArea.scrollIntoView({ behavior: "smooth", block: "start" });
+    player.play();
+    return;
+  }
   generateBtn.disabled = true;
   generatingEl.style.display = "block";
+  setOnAir(true, "REC");
   try {
     await fetch("/radio/generate", { method: "POST" });
     await loadLatest();
   } finally {
     generateBtn.disabled = false;
     generatingEl.style.display = "none";
+    setOnAir(false, "STANDBY");
   }
 });
 
@@ -83,9 +216,13 @@ async function pollStatus() {
   const res = await fetch("/radio/status");
   const status = await res.json();
 
-  generateBtn.disabled = status.generating || status.reached_daily_limit;
+  hasEpisodeToday = status.has_episode_today;
+  generateBtn.textContent = hasEpisodeToday ? "今日のラジオを聴く" : "今日のラジオを作る";
+  generateBtn.disabled = status.generating || (!hasEpisodeToday && status.reached_daily_limit);
   generatingEl.style.display = status.generating ? "block" : "none";
-  limitReachedEl.style.display = (!status.generating && status.reached_daily_limit) ? "block" : "none";
+  limitReachedEl.style.display = (!status.generating && !hasEpisodeToday && status.reached_daily_limit) ? "block" : "none";
+  if (status.generating) setOnAir(true, "REC");
+  else if (!player.paused === false && player.currentTime === 0) setOnAir(false, "STANDBY");
 
   if (wasGenerating && !status.generating) {
     await loadLatest();
