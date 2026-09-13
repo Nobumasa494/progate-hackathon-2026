@@ -25,6 +25,7 @@
 
     <input class="input" id="email" type="email" placeholder="メールアドレス">
     <input class="input" id="password" type="password" placeholder="パスワード">
+    <input class="input" id="favorite-things" type="text" placeholder="好きなこと(任意・例: 映画鑑賞)">
     <button class="btn" id="signup-btn" style="background:var(--recipe);color:#fff;">登録する</button>
 
     <p id="error" class="error" style="display:none;margin-top:12px;"></p>
@@ -38,6 +39,7 @@
 document.getElementById("signup-btn").addEventListener("click", async () => {
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
+  const favoriteThings = document.getElementById("favorite-things").value.trim();
   const errorEl = document.getElementById("error");
   const noticeEl = document.getElementById("notice");
   errorEl.style.display = "none";
@@ -48,7 +50,7 @@ document.getElementById("signup-btn").addEventListener("click", async () => {
   const res = await fetch("/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, favorite_things: favoriteThings }),
   });
 
   if (res.ok) {

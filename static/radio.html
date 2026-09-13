@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>深夜ラジオ(実験中) - 置き換えダイエット</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  .script-box{white-space:pre-wrap;font-size:13px;color:var(--ink-dim);max-height:260px;overflow-y:auto;background:var(--surface-2);border-radius:12px;padding:16px 18px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="navbar" id="nav"></div>
+
+  <div class="eyebrow">実験中の機能</div>
+  <h1>あなただけの深夜ラジオ</h1>
+  <p class="sub">今日の記録をもとに、2人のDJがあなたの話で盛り上がっています</p>
+
+  <div class="card">
+    <button class="btn" id="generate-btn">今日のラジオを作る</button>
+    <p id="generating" class="sub" style="display:none;margin-top:12px;">生成中です。1〜2分ほどかかります...</p>
+    <p id="limit-reached" class="sub" style="display:none;margin-top:12px;">今日の生成回数の上限に達しました。</p>
+    <p class="sub" style="margin-top:12px;">※食事ログを記録すると、上限に達していなければ自動でも生成が始まります(1日2回まで)</p>
+  </div>
+
+  <div class="card" id="player-area" style="display:none;">
+    <h3 class="sec" style="margin-top:0;">最新のエピソード</h3>
+    <audio id="player" controls style="width:100%;margin-bottom:12px;"></audio>
+    <a id="download-link" class="btn btn-ghost" download="radio-episode.wav" style="display:inline-block;margin-bottom:16px;">この音声を保存する</a>
+    <h3 class="sec">台本</h3>
+    <div class="script-box" id="script-text"></div>
+  </div>
+
+  <p id="empty" class="sub" style="display:none;">まだエピソードがありません。「今日のラジオを作る」を押してください。</p>
+</div>
+
+<script src="nav.js"></script>
+<script>
+renderNav("");
+
+const generateBtn = document.getElementById("generate-btn");
+const generatingEl = document.getElementById("generating");
+const limitReachedEl = document.getElementById("limit-reached");
+const playerArea = document.getElementById("player-area");
+const player = document.getElementById("player");
+const downloadLink = document.getElementById("download-link");
+const scriptText = document.getElementById("script-text");
+const emptyEl = document.getElementById("empty");
+
+async function loadLatest() {
+  const res = await fetch("/radio/latest");
+  const data = await res.json();
+  if (!data.episode) {
+    playerArea.style.display = "none";
+    emptyEl.style.display = "block";
+    return;
+  }
+  emptyEl.style.display = "none";
+  playerArea.style.display = "block";
+  player.src = data.episode.audio_url;
+  downloadLink.href = data.episode.audio_url;
+  scriptText.textContent = data.episode.script;
+}
+
+generateBtn.addEventListener("click", async () => {
+  generateBtn.disabled = true;
+  generatingEl.style.display = "block";
+  try {
+    await fetch("/radio/generate", { method: "POST" });
+    await loadLatest();
+  } finally {
+    generateBtn.disabled = false;
+    generatingEl.style.display = "none";
+  }
+});
+
+// 自動生成(食事ログ記録がきっかけ)が裏で走っているかどうかを、定期的に確認する。
+// 生成中は手動ボタンを無効化し、生成が終わった瞬間に最新のエピソードを読み込み直す。
+let wasGenerating = false;
+async function pollStatus() {
+  const res = await fetch("/radio/status");
+  const status = await res.json();
+
+  generateBtn.disabled = status.generating || status.reached_daily_limit;
+  generatingEl.style.display = status.generating ? "block" : "none";
+  limitReachedEl.style.display = (!status.generating && status.reached_daily_limit) ? "block" : "none";
+
+  if (wasGenerating && !status.generating) {
+    await loadLatest();
+  }
+  wasGenerating = status.generating;
+}
+
+loadLatest();
+pollStatus();
+setInterval(pollStatus, 5000);
+</script>
+</body>
+</html>

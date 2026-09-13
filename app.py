@@ -19,7 +19,10 @@ import auth_service
 import goal_repository
 import latest_suggestions
 import meal_logs_repository
+import radio_episode_repository
+import radio_service
 import recipe_service
+import voicevox_client
 import weight_repository
 
 app = Flask(__name__, static_folder="static", static_url_path="")
@@ -59,11 +62,12 @@ def signup():
     data = request.get_json(silent=True) or {}
     email = data.get("email")
     password = data.get("password")
+    favorite_things = data.get("favorite_things", "")
     if not email or not password:
         return jsonify({"error": "email と password が必要です"}), 400
 
     try:
-        user = auth_service.sign_up(email, password)
+        user = auth_service.sign_up(email, password, favorite_things)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -102,6 +106,42 @@ def logout():
     return jsonify({"status": "ok"})
 
 
+@app.route("/profile", methods=["GET"])
+@require_login_page
+def page_profile():
+    return app.send_static_file("profile.html")
+
+
+@app.route("/profile/data", methods=["GET"])
+@require_login_api
+def get_profile_data():
+    profile = auth_service.get_profile(session["user_id"])
+    return jsonify({
+        "favorite_things": profile.get("favorite_things", ""),
+        "voice_a_id": profile.get("voice_a_id", voicevox_client.DEFAULT_SPEAKER_A),
+        "voice_b_id": profile.get("voice_b_id", voicevox_client.DEFAULT_SPEAKER_B),
+    })
+
+
+@app.route("/profile/data", methods=["POST"])
+@require_login_api
+def update_profile_data():
+    data = request.get_json(silent=True) or {}
+    auth_service.update_profile(
+        session["user_id"],
+        favorite_things=data.get("favorite_things", ""),
+        voice_a_id=int(data["voice_a_id"]),
+        voice_b_id=int(data["voice_b_id"]),
+    )
+    return jsonify({"status": "ok"})
+
+
+@app.route("/radio/voices", methods=["GET"])
+@require_login_api
+def radio_voices():
+    return jsonify(voicevox_client.list_speakers())
+
+
 # ---------------------------------------------------------------------------
 # 画面(HTML)
 # ---------------------------------------------------------------------------
@@ -127,6 +167,12 @@ def page_goals():
 @require_login_page
 def page_weight():
     return app.send_static_file("weight.html")
+
+
+@app.route("/radio")
+@require_login_page
+def page_radio():
+    return app.send_static_file("radio.html")
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +252,7 @@ def create_meal_log():
         actual_calories=int(data["actual_calories"]),
         goal_id=goal_id,
     )
+    radio_service.maybe_generate_in_background(user_id)
     return jsonify(log), 201
 
 
@@ -322,6 +369,50 @@ def delete_latest_weight():
     user_id = session["user_id"]
     weight_repository.delete_latest_weight_log(user_id)
     return jsonify({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# 深夜ラジオ機能(実験中)
+# ---------------------------------------------------------------------------
+@app.route("/radio/latest", methods=["GET"])
+@require_login_api
+def radio_latest():
+    user_id = session["user_id"]
+    episode = radio_episode_repository.fetch_latest_episode(user_id)
+    if episode is None or not episode.get("storage_path"):
+        return jsonify({"episode": None})
+
+    audio_url = radio_episode_repository.get_audio_url(episode["storage_path"])
+    return jsonify({
+        "episode": {
+            "id": episode["id"],
+            "created_at": episode["created_at"],
+            "script": episode["script"],
+            "is_saved": episode["is_saved"],
+            "audio_url": audio_url,
+        }
+    })
+
+
+@app.route("/radio/status", methods=["GET"])
+@require_login_api
+def radio_status():
+    user_id = session["user_id"]
+    return jsonify({
+        "generating": radio_service.is_generating(user_id),
+        "has_episode_today": radio_service.has_episode_today(user_id),
+        "reached_daily_limit": radio_service.reached_daily_limit(user_id),
+    })
+
+
+@app.route("/radio/generate", methods=["POST"])
+@require_login_api
+def radio_generate():
+    user_id = session["user_id"]
+    if radio_service.reached_daily_limit(user_id):
+        return jsonify({"error": f"1日に生成できる回数({radio_service.MAX_EPISODES_PER_DAY}回)に達しています"}), 429
+    episode = radio_service.generate_todays_episode(user_id)
+    return jsonify({"status": "ok", "episode_id": episode["id"]})
 
 
 if __name__ == "__main__":
