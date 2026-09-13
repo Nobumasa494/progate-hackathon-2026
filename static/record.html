@@ -52,7 +52,7 @@ let suggestion = null;
 async function loadSuggestion() {
   const area = document.getElementById("suggest-area");
   try {
-    const res = await fetch("/suggestions/latest?user_id=" + encodeURIComponent(USER_ID));
+    const res = await fetch("/suggestions/latest");
     if (!res.ok) {
       area.innerHTML = `<p class="error">まだ提案がありません。まず<a href="/">レシピ提案画面</a>で料理を検索してください。</p>`;
       return;
@@ -97,7 +97,6 @@ document.getElementById("record-btn").addEventListener("click", async () => {
   if (!suggestion) return;
   const didReplace = choiceReplaced.classList.contains("active");
   const body = {
-    user_id: USER_ID,
     dish_name: suggestion.dish_name,
     suggested_replacement_name: suggestion.suggested_replacement_name,
     original_calories: suggestion.original_calories,
@@ -112,7 +111,7 @@ document.getElementById("record-btn").addEventListener("click", async () => {
   });
   const confirmEl = document.getElementById("confirm");
   if (res.ok) {
-    const summaryRes = await fetch("/meal_logs/weekly-summary?user_id=" + encodeURIComponent(USER_ID));
+    const summaryRes = await fetch("/meal_logs/weekly-summary");
     const summary = await summaryRes.json();
     const thisWeek = summary[0] ? summary[0].total_saved_kcal : 0;
     confirmEl.textContent = `記録しました。今週の削減: ${thisWeek}kcal`;

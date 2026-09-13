@@ -13,8 +13,15 @@ function renderNav(activeKey) {
       <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${it.icon}</svg>
       ${it.label}
     </a>
-  `).join("");
+  `).join("") + `
+    <a class="navitem" href="#" id="logout-link" style="margin-left:auto;">
+      <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H4.5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1H8"/><path d="M12 14l4-4-4-4"/><path d="M16 10H7.5"/></svg>
+      ログアウト
+    </a>
+  `;
+  document.getElementById("logout-link").addEventListener("click", async (e) => {
+    e.preventDefault();
+    await fetch("/logout", { method: "POST" });
+    window.location.href = "/login";
+  });
 }
-
-// 認証機能がまだ無いため、ローカル検証用の固定ユーザーIDを使う
-const USER_ID = "00000000-0000-0000-0000-000000000001";

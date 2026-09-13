@@ -44,7 +44,7 @@ const deleteButton = document.getElementById("delete-btn");
 let chart;
 
 async function loadChart() {
-  const res = await fetch(`/weight?user_id=${encodeURIComponent(USER_ID)}`);
+  const res = await fetch("/weight");
   const logs = await res.json();
   const labels = logs.map(l => new Date(l.created_at).toLocaleDateString());
   const data = logs.map(l => l.weight_kg);
@@ -66,13 +66,13 @@ async function loadChart() {
 async function record() {
   const weight = parseFloat(input.value);
   if (!weight) return;
-  await fetch(`/weight?user_id=${encodeURIComponent(USER_ID)}&weight_kg=${weight}`, { method: "POST" });
+  await fetch(`/weight?weight_kg=${weight}`, { method: "POST" });
   input.value = "";
   loadChart();
 }
 
 async function deleteLatest() {
-  await fetch(`/weight/latest?user_id=${encodeURIComponent(USER_ID)}`, { method: "DELETE" });
+  await fetch("/weight/latest", { method: "DELETE" });
   loadChart();
 }
 

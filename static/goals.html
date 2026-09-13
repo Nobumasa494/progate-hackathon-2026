@@ -97,7 +97,7 @@ function renderProgress(progress) {
 
 async function loadProgress() {
   try {
-    const res = await fetch("/progress?user_id=" + encodeURIComponent(USER_ID));
+    const res = await fetch("/progress");
     if (!res.ok) return;
     renderProgress(await res.json());
   } catch (e) {
@@ -107,7 +107,7 @@ async function loadProgress() {
 
 async function loadGoal() {
   try {
-    const res = await fetch("/goals/latest?user_id=" + encodeURIComponent(USER_ID));
+    const res = await fetch("/goals/latest");
     if (!res.ok) { renderGoal(null); return; }
     renderGoal(await res.json());
   } catch (e) {
@@ -123,7 +123,7 @@ document.getElementById("update-btn").addEventListener("click", async () => {
   const res = await fetch("/goals", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: USER_ID, target_weight_kg: Number(targetWeight), target_date: targetDate }),
+    body: JSON.stringify({ target_weight_kg: Number(targetWeight), target_date: targetDate }),
   });
   const toast = document.getElementById("toast");
   if (res.ok) {

@@ -73,7 +73,7 @@ async function suggest() {
   button.disabled = true;
 
   try {
-    const url = "/suggest?dish_name=" + encodeURIComponent(dishName) + "&user_id=" + encodeURIComponent(USER_ID);
+    const url = "/suggest?dish_name=" + encodeURIComponent(dishName);
     const res = await fetch(url);
     if (!res.ok) throw new Error("failed");
     const data = await res.json();
