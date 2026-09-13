@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>設定 - 置き換えダイエット</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  .label{font-size:13px;color:var(--ink-dim);margin-bottom:10px;font-weight:700;}
+  select.input{width:100%;margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="navbar" id="nav"></div>
+
+  <div class="eyebrow">設定</div>
+  <h1>プロフィール</h1>
+  <p class="sub">深夜ラジオ機能(実験中)で使う情報です</p>
+
+  <div class="card">
+    <div class="label">好きなこと</div>
+    <input class="input" id="favorite-things" type="text" placeholder="例: 映画鑑賞" style="margin-bottom:14px;">
+
+    <div class="label">DJ Aのキャラクター</div>
+    <select class="input" id="voice-a"></select>
+
+    <div class="label">DJ Bのキャラクター</div>
+    <select class="input" id="voice-b"></select>
+
+    <button class="btn" id="save-btn">保存する</button>
+    <p id="saved" class="sub" style="display:none;margin-top:12px;">保存しました。</p>
+    <p id="voices-error" class="error" style="display:none;margin-top:12px;">
+      キャラクター一覧の取得に失敗しました。VOICEVOXエンジンが起動しているか確認してください。
+    </p>
+  </div>
+</div>
+
+<script src="nav.js"></script>
+<script>
+renderNav("");
+
+const favoriteThingsInput = document.getElementById("favorite-things");
+const voiceASelect = document.getElementById("voice-a");
+const voiceBSelect = document.getElementById("voice-b");
+const savedEl = document.getElementById("saved");
+const voicesErrorEl = document.getElementById("voices-error");
+
+function fillVoiceOptions(select, speakers, selectedId) {
+  select.innerHTML = "";
+  for (const speaker of speakers) {
+    for (const style of speaker.styles) {
+      const option = document.createElement("option");
+      option.value = style.id;
+      option.textContent = `${speaker.name}(${style.name})`;
+      if (style.id === selectedId) option.selected = true;
+      select.appendChild(option);
+    }
+  }
+}
+
+async function load() {
+  const [profileRes, voicesRes] = await Promise.all([
+    fetch("/profile/data"),
+    fetch("/radio/voices"),
+  ]);
+
+  const profile = await profileRes.json();
+  favoriteThingsInput.value = profile.favorite_things || "";
+
+  if (voicesRes.ok) {
+    const speakers = await voicesRes.json();
+    fillVoiceOptions(voiceASelect, speakers, profile.voice_a_id);
+    fillVoiceOptions(voiceBSelect, speakers, profile.voice_b_id);
+  } else {
+    voicesErrorEl.style.display = "block";
+  }
+}
+
+document.getElementById("save-btn").addEventListener("click", async () => {
+  savedEl.style.display = "none";
+  await fetch("/profile/data", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      favorite_things: favoriteThingsInput.value.trim(),
+      voice_a_id: voiceASelect.value,
+      voice_b_id: voiceBSelect.value,
+    }),
+  });
+  savedEl.style.display = "block";
+});
+
+load();
+</script>
+</body>
+</html>
