@@ -4,6 +4,7 @@ const NAV_ITEMS = [
   { key: "goal", href: "/goals", label: "目標", icon: '<circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="3.6"/><circle cx="10" cy="10" r="0.6" fill="currentColor" stroke="none"/>' },
   { key: "weight", href: "/weight-log", label: "体重記録", icon: '<path d="M3 13l4-3 3 2 6-7"/><circle cx="16" cy="5" r="1.4" fill="currentColor" stroke="none"/>' },
   { key: "radio", href: "/radio", label: "ラジオ", icon: '<circle cx="10" cy="12" r="5"/><path d="M10 9v3l2 1"/><path d="M6 6L4 4M14 6l2-2"/>' },
+  { key: "discover", href: "/discover", label: "みんなのラジオ", icon: '<path d="M3 10a7 7 0 0 1 14 0"/><path d="M3 10a7 7 0 0 0 14 0" opacity="0.4"/><circle cx="10" cy="10" r="1.4" fill="currentColor" stroke="none"/>' },
 ];
 
 function renderNav(activeKey) {

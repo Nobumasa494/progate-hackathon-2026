@@ -389,6 +389,7 @@ def radio_latest():
             "created_at": episode["created_at"],
             "script": episode["script"],
             "is_saved": episode["is_saved"],
+            "is_shared": episode.get("is_shared", False),
             "audio_url": audio_url,
         }
     })
@@ -413,6 +414,56 @@ def radio_generate():
         return jsonify({"error": f"1日に生成できる回数({radio_service.MAX_EPISODES_PER_DAY}回)に達しています"}), 429
     episode = radio_service.generate_todays_episode(user_id)
     return jsonify({"status": "ok", "episode_id": episode["id"]})
+
+
+@app.route("/radio/diary", methods=["GET"])
+@require_login_api
+def get_diary_note():
+    note = auth_service.get_pending_diary_note(session["user_id"])
+    return jsonify({"note": note})
+
+
+@app.route("/radio/diary", methods=["POST"])
+@require_login_api
+def update_diary_note():
+    data = request.get_json(silent=True) or {}
+    auth_service.update_pending_diary_note(session["user_id"], data.get("note", ""))
+    return jsonify({"status": "ok"})
+
+
+@app.route("/radio/share", methods=["POST"])
+@require_login_api
+def radio_share():
+    data = request.get_json(silent=True) or {}
+    episode_id = data.get("episode_id")
+    if not episode_id:
+        return jsonify({"error": "episode_id が必要です"}), 400
+    radio_episode_repository.mark_shared(session["user_id"], episode_id)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/discover")
+@require_login_page
+def page_discover():
+    return app.send_static_file("discover.html")
+
+
+@app.route("/discover/feed", methods=["GET"])
+@require_login_api
+def discover_feed():
+    before = request.args.get("before")
+    episodes = radio_episode_repository.fetch_shared_episodes(limit=10, before=before)
+    result = []
+    for ep in episodes:
+        if not ep.get("storage_path"):
+            continue
+        result.append({
+            "id": ep["id"],
+            "created_at": ep["created_at"],
+            "script": ep["script"],
+            "audio_url": radio_episode_repository.get_audio_url(ep["storage_path"]),
+        })
+    return jsonify({"episodes": result})
 
 
 if __name__ == "__main__":

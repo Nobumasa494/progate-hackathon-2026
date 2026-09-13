@@ -65,3 +65,17 @@ def get_favorite_things(user_id: str) -> str:
 def update_favorite_things(user_id: str, favorite_things: str) -> None:
     """好きなことを後から更新する(サインアップ済みユーザー向け)。"""
     update_profile(user_id, favorite_things=favorite_things)
+
+
+def get_pending_diary_note(user_id: str) -> str:
+    """「今日、DJたちに教えたいことある?」への回答を取得する(未記入なら空文字)。
+
+    「今日の分」として次のラジオ生成時に一度だけ使われ、使ったら空にリセットされる
+    (radio_service.py参照)。
+    """
+    return get_profile(user_id).get("pending_diary_note", "")
+
+
+def update_pending_diary_note(user_id: str, note: str) -> None:
+    """「今日、DJたちに教えたいことある?」への回答を保存する。"""
+    update_profile(user_id, pending_diary_note=note)

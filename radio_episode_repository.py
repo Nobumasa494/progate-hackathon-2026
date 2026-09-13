@@ -130,7 +130,12 @@ def generate_and_store_episode(user_id: str, script: str, audio_bytes: bytes, cl
     client = client or get_client()
 
     old_episode = fetch_latest_episode(user_id, client)
-    if old_episode and old_episode.get("storage_path") and not old_episode.get("is_saved"):
+    if (
+        old_episode
+        and old_episode.get("storage_path")
+        and not old_episode.get("is_saved")
+        and not old_episode.get("is_shared")
+    ):
         delete_episode_audio(old_episode["storage_path"], client)
         client.table("radio_episodes").update({"storage_path": None}).eq("id", old_episode["id"]).execute()
 
@@ -160,3 +165,32 @@ def mark_saved(episode_id: str, client: Optional[Client] = None) -> None:
     """「この回を保存する」が押されたときに呼ぶ。自動削除の対象から外れる。"""
     client = client or get_client()
     client.table("radio_episodes").update({"is_saved": True}).eq("id", episode_id).execute()
+
+
+def mark_shared(user_id: str, episode_id: str, client: Optional[Client] = None) -> None:
+    """「みんなに共有する」が押されたときに呼ぶ。自動削除の対象から外れ、公開フィードに載る。
+
+    user_idも受け取り、そのユーザー自身のエピソードにしか適用できないようにする(他人のIDを
+    指定して勝手に共有状態を変えられないようにするため)。
+    """
+    client = client or get_client()
+    client.table("radio_episodes").update({"is_shared": True}).eq("id", episode_id).eq("user_id", user_id).execute()
+
+
+def fetch_shared_episodes(limit: int = 10, before: Optional[str] = None, client: Optional[Client] = None) -> list[dict]:
+    """公開フィード用に、共有されたエピソードを新しい順に取得する。
+
+    user_idは意図的に取得しない(誰の投稿か分からない形で返すため、6-6章参照)。
+    before(created_atの値)を指定すると、それより古いものから続きを取得する(無限スクロール用)。
+    """
+    client = client or get_client()
+    query = (
+        client.table("radio_episodes")
+        .select("id, created_at, script, storage_path")
+        .eq("is_shared", True)
+        .order("created_at", desc=True)
+        .limit(limit)
+    )
+    if before:
+        query = query.lt("created_at", before)
+    return query.execute().data

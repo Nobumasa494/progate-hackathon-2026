@@ -228,8 +228,9 @@ def _generate_todays_episode(user_id: str) -> dict:
     favorite_things = profile.get("favorite_things", "")
     recent_scripts = radio_episode_repository.fetch_recent_scripts(user_id, limit=2)
     memories = radio_memory_repository.fetch_top_memories(user_id, limit=3)
+    diary_note = profile.get("pending_diary_note", "")
 
-    user_prompt = radio_prompt.build_user_prompt(events_text, favorite_things, recent_scripts, memories)
+    user_prompt = radio_prompt.build_user_prompt(events_text, favorite_things, recent_scripts, memories, diary_note)
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     response = client.chat.completions.create(
@@ -257,7 +258,10 @@ def _generate_todays_episode(user_id: str) -> dict:
     )
 
     episode_count = profile.get("radio_episode_count", 0) + 1
-    auth_service.update_profile(user_id, radio_episode_count=episode_count)
+    updates = {"radio_episode_count": episode_count}
+    if diary_note:
+        updates["pending_diary_note"] = ""  # 使ったら「今日の分」として空にリセットする
+    auth_service.update_profile(user_id, **updates)
     _maybe_generate_reflection(user_id, episode_count)
 
     return episode

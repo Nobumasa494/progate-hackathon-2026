@@ -115,6 +115,15 @@
 
       <audio id="player" controls class="w-100 mb-3"></audio>
 
+      <div class="mb-3">
+        <label for="diary-note" class="form-label small fw-bold text-secondary">今日、DJたちに教えたいことある?</label>
+        <textarea id="diary-note" class="form-control" rows="2" placeholder="面白かったこと、愚痴りたいこと、なんでも"></textarea>
+        <div class="d-flex justify-content-between align-items-center mt-1">
+          <span id="diary-saved" class="text-secondary small" style="display:none;">保存しました</span>
+          <button id="diary-save-btn" class="btn btn-outline-secondary btn-sm ms-auto">保存する</button>
+        </div>
+      </div>
+
       <button class="btn btn-radio w-100 fw-bold" id="generate-btn">今日のラジオを作る</button>
       <p id="generating" class="text-secondary small mt-2 mb-0" style="display:none;">生成中です。1〜2分ほどかかります...</p>
       <p id="limit-reached" class="text-secondary small mt-2 mb-0" style="display:none;">今日の生成回数の上限に達しました。</p>
@@ -125,6 +134,11 @@
   <div class="card shadow-sm border-0 mb-3" id="player-area" style="display:none;">
     <div class="card-body">
       <a id="download-link" class="btn btn-outline-secondary btn-sm mb-3" download="radio-episode.wav">この音声を保存する</a>
+      <button id="share-btn" class="btn btn-outline-secondary btn-sm mb-3 ms-2">みんなに共有する</button>
+      <span id="shared-label" class="badge text-bg-light border ms-2 mb-3" style="display:none;">共有済み(匿名で公開中)</span>
+      <p class="text-secondary small">
+        ※共有すると、体重や食事内容も含めて誰でも聞けるようになります(投稿者が誰かは分かりません)
+      </p>
       <h3 class="h6 fw-bold">台本</h3>
       <div class="bg-light rounded p-3 small text-secondary" id="script-text" style="white-space:pre-wrap;max-height:260px;overflow-y:auto;"></div>
     </div>
@@ -143,6 +157,9 @@ const limitReachedEl = document.getElementById("limit-reached");
 const playerArea = document.getElementById("player-area");
 const player = document.getElementById("player");
 const downloadLink = document.getElementById("download-link");
+const shareBtn = document.getElementById("share-btn");
+const sharedLabel = document.getElementById("shared-label");
+let currentEpisodeId = null;
 const scriptText = document.getElementById("script-text");
 const emptyEl = document.getElementById("empty");
 const onairEl = document.getElementById("onair");
@@ -184,7 +201,23 @@ async function loadLatest() {
   player.src = data.episode.audio_url;
   downloadLink.href = data.episode.audio_url;
   scriptText.textContent = data.episode.script;
+
+  currentEpisodeId = data.episode.id;
+  shareBtn.style.display = data.episode.is_shared ? "none" : "inline-block";
+  sharedLabel.style.display = data.episode.is_shared ? "inline-block" : "none";
 }
+
+shareBtn.addEventListener("click", async () => {
+  if (!currentEpisodeId) return;
+  if (!confirm("この回を、誰でも聞けるように共有します(投稿者は匿名)。よろしいですか?")) return;
+  await fetch("/radio/share", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ episode_id: currentEpisodeId }),
+  });
+  shareBtn.style.display = "none";
+  sharedLabel.style.display = "inline-block";
+});
 
 // 今日もう出来ているかどうかで、ボタンの役割を切り替える。
 // 無ければ「作る」(押すと生成)、あれば「聴く」(押すとプレイヤーまでスクロールするだけ)。
@@ -233,6 +266,27 @@ async function pollStatus() {
 loadLatest();
 pollStatus();
 setInterval(pollStatus, 5000);
+
+const diaryNoteEl = document.getElementById("diary-note");
+const diarySavedEl = document.getElementById("diary-saved");
+
+async function loadDiaryNote() {
+  const res = await fetch("/radio/diary");
+  const data = await res.json();
+  diaryNoteEl.value = data.note || "";
+}
+
+document.getElementById("diary-save-btn").addEventListener("click", async () => {
+  diarySavedEl.style.display = "none";
+  await fetch("/radio/diary", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note: diaryNoteEl.value }),
+  });
+  diarySavedEl.style.display = "inline";
+});
+
+loadDiaryNote();
 </script>
 </body>
 </html>
