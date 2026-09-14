@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import os
 import wave
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
@@ -63,11 +64,18 @@ def synthesize_script(
     lines: [{"speaker": "A", "text": "..."}, ...]
     speaker_a / speaker_b: DJ A・DJ Bに使うVOICEVOXの話者ID(ユーザーが選べる、6-4章参照)
     戻り値: 結合済みのwavファイルのバイト列(メモリ上のみ。ディスクには書かない)
+
+    セリフごとの合成は並列で行う。VOICEVOXはローカルのHTTPサーバーで、1セリフごとに
+    2回の通信(audio_query→synthesis)が発生するため、40〜60セリフを順番にやると
+    生成時間の大半をここが占めてしまう。ThreadPoolExecutor.map()は入力順を保ったまま
+    結果を返すので、並列化してもセリフの再生順は崩れない。
     """
-    line_audio: list[bytes] = []
-    for line in lines:
+    def _synthesize(line: dict) -> bytes:
         speaker_id = speaker_a if line["speaker"] == "A" else speaker_b
-        line_audio.append(synthesize_line(line["text"], speaker_id))
+        return synthesize_line(line["text"], speaker_id)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        line_audio = list(executor.map(_synthesize, lines))
 
     output_buffer = io.BytesIO()
     output_wave = wave.open(output_buffer, "wb")
