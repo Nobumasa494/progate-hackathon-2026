@@ -1,6 +1,6 @@
 """VOICEVOXエンジン(ローカルで起動しているもの)を使って、台本を音声にする。
 
-前提: VOICEVOXエンジンが http://localhost:50021 で起動していること(voicevox_radio_test.pyと同じ)。
+前提: VOICEVOXエンジンが http://localhost:50021 で起動していること。
 """
 
 from __future__ import annotations

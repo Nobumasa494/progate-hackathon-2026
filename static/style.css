@@ -1,15 +1,32 @@
 :root{
-  --bg: oklch(97% 0.012 45);
-  --surface: oklch(99% 0.006 45);
-  --surface-2: oklch(94% 0.018 45);
-  --border: oklch(88% 0.02 45);
-  --ink: oklch(23% 0.02 45);
-  --ink-dim: oklch(47% 0.02 45);
-  --recipe: oklch(52% 0.14 40); --recipe-bg: oklch(93% 0.05 40);
-  --logs: oklch(52% 0.14 15); --logs-bg: oklch(93% 0.05 15);
-  --goal: oklch(50% 0.13 150); --goal-bg: oklch(93% 0.05 150);
-  --weight: oklch(55% 0.12 80); --weight-bg: oklch(93% 0.05 80);
-  --warn: oklch(50% 0.15 35); --warn-bg: oklch(93% 0.05 35);
+  --bg: #f3f8f4;
+  --surface: #ffffff;
+  --surface-2: #eef6f0;
+  --border: #dfeadf;
+  --ink: #1c2b20;
+  --ink-dim: #6c7d70;
+
+  --primary: #2e7d4f;
+  --primary-dark: #205c3a;
+  --primary-bg: #e3f3e7;
+
+  --recipe: #2e7d4f; --recipe-bg: #e3f3e7;
+  --logs: #2e7d4f; --logs-bg: #e3f3e7;
+  --goal: #2e7d4f; --goal-bg: #e3f3e7;
+  --weight: #2e7d4f; --weight-bg: #e3f3e7;
+  --warn: #c1502e; --warn-bg: #fbe7e0;
+  --down: #2e7d4f; --up: #c1502e;
+
+  --ai-a: #2e7d4f; --ai-b: #17a589; --ai-c: #7c5cbf;
+  --ai-gradient: linear-gradient(135deg, var(--ai-a), var(--ai-b) 55%, var(--ai-c));
+
+  /* Bootstrapの色をアプリの配色に上書きする */
+  --bs-primary: #2e7d4f;
+  --bs-primary-rgb: 46,125,79;
+  --bs-body-font-family: 'Zen Kaku Gothic New', sans-serif;
+  --bs-border-radius: 14px;
+  --bs-border-radius-lg: 20px;
+  --bs-border-radius-pill: 999px;
 }
 
 *{box-sizing:border-box;}
@@ -17,36 +34,72 @@ body{
   margin:0;background:var(--bg);color:var(--ink);
   font-family:'Zen Kaku Gothic New',sans-serif;
 }
-a{color:var(--recipe);}
-.wrap{max-width:680px;margin:0 auto;padding:36px 24px 90px;}
+a{color:var(--primary);}
+.wrap{max-width:480px;margin:0 auto;padding:20px 18px 100px;}
 
-/* nav */
-.navbar{display:flex;gap:8px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:16px;flex-wrap:wrap;margin-bottom:30px;}
-.navitem{display:flex;align-items:center;gap:7px;padding:9px 16px;border-radius:11px;font-size:14px;font-weight:500;color:var(--ink-dim);text-decoration:none;}
+/* 上部ヘッダー(モバイルアプリ風) */
+.appbar{display:flex;align-items:center;gap:10px;padding:6px 2px 18px;}
+.appbar .appbar-icon{width:36px;height:36px;border-radius:10px;background:var(--primary-bg);color:var(--primary);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.appbar .appbar-title{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:19px;}
+
+/* 下部タブバー */
+.navbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:10;
+  display:flex;justify-content:space-around;align-items:center;
+  background:var(--surface);border-top:1px solid var(--border);
+  padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+  max-width:480px;margin:0 auto;
+}
+.navitem{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 10px;border-radius:12px;font-size:11px;font-weight:600;color:var(--ink-dim);text-decoration:none;flex:1;}
 .navitem svg{flex:0 0 auto;}
-.navitem.active.recipe{background:var(--recipe-bg);color:var(--recipe);font-weight:700;}
-.navitem.active.logs{background:var(--logs-bg);color:var(--logs);font-weight:700;}
-.navitem.active.goal{background:var(--goal-bg);color:var(--goal);font-weight:700;}
-.navitem.active.weight{background:var(--weight-bg);color:var(--weight);font-weight:700;}
+.navitem.active{color:var(--primary);}
+.navitem#logout-link{flex:0 0 auto;color:var(--ink-dim);}
 
-.eyebrow{font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 10px;}
-h1{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:26px;margin:0 0 8px;}
-.sub{color:var(--ink-dim);font-size:14px;margin:0 0 26px;}
+.eyebrow{font-weight:700;font-size:12px;letter-spacing:.08em;color:var(--primary);margin:0 0 6px;}
+h1{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:22px;margin:0 0 8px;}
+.sub{color:var(--ink-dim);font-size:13px;margin:0 0 22px;}
 
-.card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px 28px;margin-bottom:20px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px 22px;margin-bottom:16px;box-shadow:0 2px 10px rgba(46,125,79,0.05);}
 .inputrow{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
-.input{flex:1;min-width:140px;box-sizing:border-box;padding:14px 16px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;background:var(--surface-2);color:var(--ink);}
-.btn{border:none;border-radius:12px;padding:14px 22px;font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;font-size:14px;cursor:pointer;}
-.btn-ghost{background:transparent;color:var(--ink-dim);border:1.5px solid var(--border);}
+.input{flex:1;min-width:140px;box-sizing:border-box;padding:14px 18px;border:1.5px solid var(--border);border-radius:999px;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;background:var(--surface-2);color:var(--ink);}
+.btn{border:none;border-radius:14px;padding:15px 22px;font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:14px;cursor:pointer;background:var(--primary);color:#fff;}
+.btn-ghost{background:var(--surface-2);color:var(--ink-dim);border:1.5px solid var(--border);}
 .btn:disabled{opacity:.5;cursor:default;}
 
 .loading{color:var(--ink-dim);font-size:14px;}
 .error{color:var(--warn);font-size:14px;}
 
-h3.sec{font-family:'Zen Maru Gothic',sans-serif;font-size:14px;font-weight:700;margin:22px 0 8px;}
+h3.sec{font-family:'Zen Maru Gothic',sans-serif;font-size:14px;font-weight:700;margin:22px 0 8px;color:var(--primary-dark);}
 ul,ol{margin:0;padding-left:20px;font-size:14px;line-height:1.9;}
 .statrow{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;}
-.stat{flex:1;min-width:150px;border-radius:12px;padding:14px 16px;}
+.stat{flex:1;min-width:150px;border-radius:14px;padding:14px 16px;background:var(--surface-2);}
 .stat .k{font-size:12px;color:var(--ink-dim);margin-bottom:2px;}
-.stat .v{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:20px;}
-.note{margin-top:20px;border-radius:12px;padding:12px 16px;font-size:13px;border:1px solid;}
+.stat .v{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:20px;color:var(--primary-dark);}
+.note{margin-top:20px;border-radius:14px;padding:12px 16px;font-size:13px;border:1px solid;}
+
+/* AI演出: グラデーション・光る演出・キラキラアイコン */
+.ai-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--ai-gradient);color:#fff;font-weight:700;font-size:12px;
+  padding:6px 14px;border-radius:999px;
+  box-shadow:0 4px 14px -4px rgba(46,125,79,0.55);
+}
+.ai-badge svg{flex:0 0 auto;}
+.ai-glow-btn{
+  background:var(--ai-gradient)!important;border:none!important;color:#fff!important;
+  box-shadow:0 6px 20px -6px rgba(46,125,79,0.6);
+  position:relative;overflow:hidden;
+}
+.ai-glow-btn:hover{filter:brightness(1.05);}
+.ai-card{
+  position:relative;border:1px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    var(--ai-gradient) border-box;
+}
+.ai-title{
+  background:var(--ai-gradient);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.sparkle{display:inline-block;animation:sparkle-pulse 1.8s ease-in-out infinite;}
+@keyframes sparkle-pulse{0%,100%{opacity:0.55;transform:scale(0.9);}50%{opacity:1;transform:scale(1.1);}}

@@ -7,7 +7,10 @@
     created_at   : timestamptz (自動記録)
     script       : text (その回の台本テキスト。継続性のため次回生成時に読む)
     storage_path : text (音声ファイルの保存先。Storageから削除したらNullに戻す)
-    is_saved     : boolean (ユーザーが「この回を保存する」を選んだかどうか)
+    is_saved     : boolean (未使用。以前は「ずっと残す」機能があったが廃止した)
+    is_shared    : boolean (ユーザーが「みんなに共有する」を選んだかどうか)
+    shared_display_name : text (共有時に本人が自由に決める表示名。実名ではない任意項目)
+    shared_comment       : text (共有時に本人が添えるひとこと)
 
 【Storageのバケット】
     radio-audio (非公開)
@@ -31,6 +34,17 @@ except ImportError:
 from supabase import Client, create_client
 
 BUCKET = "radio-audio"
+
+# 1人が同時に保持できるエピソードの上限。共有されているかどうかは関係なく、
+# これを超えたら一番古いものから音声・台本ごと完全に削除する(共有時の表示名・コメントも
+# 行ごと一緒に消える)。上限は他ユーザーの活動と無関係に、本人の生成回数だけで決まる。
+MAX_EPISODES_PER_USER = 2
+
+# アプリ全体で保持するエピソード数の絶対上限。Supabase無料枠のStorage容量(約1GB)を
+# 音声1件あたりの実サイズ(5分・24kHz・モノラルWAVで約14MB)から逆算した値。
+# 本人ごとの上限だけだとユーザー数が増えた分だけ際限なく増えるため、
+# 容量そのものに直結した最終防衛ラインとして別に設ける。
+MAX_TOTAL_EPISODES = 80
 
 
 def _load_env() -> None:
@@ -96,12 +110,11 @@ def delete_episode_audio(storage_path: str, client: Optional[Client] = None) -> 
     client.storage.from_(BUCKET).remove([storage_path])
 
 
-def delete_old_episodes(user_id: str, keep: int = 2, client: Optional[Client] = None) -> None:
-    """継続性のプロンプトに使う直近keep件を残し、それより古い行を削除する(台本テキストがたまり続けないように)。
+def delete_old_episodes(user_id: str, keep: int = MAX_EPISODES_PER_USER, client: Optional[Client] = None) -> None:
+    """本人ごとに直近keep件だけ残し、それより古い行を完全に削除する。
 
-    is_saved の行は今は使っていない(6-3章: 保存は端末ダウンロード方式に変更済み)ため、
-    古ければ問答無用で削除する。音声はすでに generate_and_store_episode 側で消えている想定だが、
-    念のためstorage_pathが残っていれば一緒に削除する。
+    is_shared(共有中)かどうかは見ない。共有されていても、この上限を超えれば
+    音声・台本ごと削除され、共有時に添えた表示名・コメントも一緒に消える。
     """
     client = client or get_client()
     response = (
@@ -122,22 +135,14 @@ def generate_and_store_episode(user_id: str, script: str, audio_bytes: bytes, cl
     """新しいエピソードを保存する。
 
     手順(設計書6-3章):
-        1. 前回のエピソードがあり、音声が残っていて、保存指定されていなければ、その音声だけ削除する
-        2. 新しい音声をStorageにアップロードする
-        3. radio_episodesに新しい行を作る(台本・保存先パス)
-        4. 継続性に使う直近2件より古い行を削除する(テキストが際限なくたまらないように)
+        1. 新しい音声をStorageにアップロードする
+        2. radio_episodesに新しい行を作る(台本・保存先パス)
+        3. 本人ごとにMAX_EPISODES_PER_USER件より古い行を削除する
+           (共有されているかどうかは関係ない)
+        4. アプリ全体でMAX_TOTAL_EPISODES件を超えていたら、ユーザー・共有の別を
+           問わず一番古いものから削除する(Storage容量そのものへの安全弁)
     """
     client = client or get_client()
-
-    old_episode = fetch_latest_episode(user_id, client)
-    if (
-        old_episode
-        and old_episode.get("storage_path")
-        and not old_episode.get("is_saved")
-        and not old_episode.get("is_shared")
-    ):
-        delete_episode_audio(old_episode["storage_path"], client)
-        client.table("radio_episodes").update({"storage_path": None}).eq("id", old_episode["id"]).execute()
 
     storage_path = f"{user_id}/{uuid.uuid4()}.wav"
     client.storage.from_(BUCKET).upload(storage_path, audio_bytes, {"content-type": "audio/wav"})
@@ -149,9 +154,28 @@ def generate_and_store_episode(user_id: str, script: str, audio_bytes: bytes, cl
     )
     episode = response.data[0]
 
-    delete_old_episodes(user_id, keep=2, client=client)
+    delete_old_episodes(user_id, client=client)
+    _enforce_global_cap(client)
 
     return episode
+
+
+def _enforce_global_cap(client: Optional[Client] = None) -> None:
+    """アプリ全体のエピソード数がMAX_TOTAL_EPISODESを超えていたら、
+    ユーザー・共有の別を問わず、一番古いものから完全に削除する。
+    """
+    client = client or get_client()
+    response = (
+        client.table("radio_episodes")
+        .select("id, storage_path")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    excess_rows = response.data[MAX_TOTAL_EPISODES:]
+    for row in excess_rows:
+        if row.get("storage_path"):
+            delete_episode_audio(row["storage_path"], client)
+        client.table("radio_episodes").delete().eq("id", row["id"]).execute()
 
 
 def get_audio_url(storage_path: str, expires_in: int = 3600, client: Optional[Client] = None) -> str:
@@ -161,20 +185,30 @@ def get_audio_url(storage_path: str, expires_in: int = 3600, client: Optional[Cl
     return result["signedURL"]
 
 
-def mark_saved(episode_id: str, client: Optional[Client] = None) -> None:
-    """「この回を保存する」が押されたときに呼ぶ。自動削除の対象から外れる。"""
-    client = client or get_client()
-    client.table("radio_episodes").update({"is_saved": True}).eq("id", episode_id).execute()
-
-
-def mark_shared(user_id: str, episode_id: str, client: Optional[Client] = None) -> None:
-    """「みんなに共有する」が押されたときに呼ぶ。自動削除の対象から外れ、公開フィードに載る。
+def mark_shared(
+    user_id: str,
+    episode_id: str,
+    display_name: str = "",
+    comment: str = "",
+    client: Optional[Client] = None,
+) -> None:
+    """「みんなに共有する」が押されたときに呼ぶ。公開フィード(discover)に載る。
 
     user_idも受け取り、そのユーザー自身のエピソードにしか適用できないようにする(他人のIDを
     指定して勝手に共有状態を変えられないようにするため)。
+
+    display_name・commentは本人が自由に決められる、実名とは無関係な任意項目(6-6章参照)。
+    空文字ならNoneとして保存し、discover側で「匿名」として扱う。
+
+    共有した後も、本人がMAX_EPISODES_PER_USER件を超えて生成すれば、他の回と同じように
+    通常通り削除される(6-7章参照)。共有専用の猶予は設けていない。
     """
     client = client or get_client()
-    client.table("radio_episodes").update({"is_shared": True}).eq("id", episode_id).eq("user_id", user_id).execute()
+    client.table("radio_episodes").update({
+        "is_shared": True,
+        "shared_display_name": display_name or None,
+        "shared_comment": comment or None,
+    }).eq("id", episode_id).eq("user_id", user_id).execute()
 
 
 def fetch_shared_episodes(limit: int = 10, before: Optional[str] = None, client: Optional[Client] = None) -> list[dict]:
@@ -186,7 +220,7 @@ def fetch_shared_episodes(limit: int = 10, before: Optional[str] = None, client:
     client = client or get_client()
     query = (
         client.table("radio_episodes")
-        .select("id, created_at, script, storage_path")
+        .select("id, created_at, script, storage_path, shared_display_name, shared_comment")
         .eq("is_shared", True)
         .order("created_at", desc=True)
         .limit(limit)

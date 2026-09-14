@@ -118,6 +118,7 @@ def get_profile_data():
     profile = auth_service.get_profile(session["user_id"])
     return jsonify({
         "favorite_things": profile.get("favorite_things", ""),
+        "interests": profile.get("interests", ""),
         "voice_a_id": profile.get("voice_a_id", voicevox_client.DEFAULT_SPEAKER_A),
         "voice_b_id": profile.get("voice_b_id", voicevox_client.DEFAULT_SPEAKER_B),
     })
@@ -130,6 +131,7 @@ def update_profile_data():
     auth_service.update_profile(
         session["user_id"],
         favorite_things=data.get("favorite_things", ""),
+        interests=data.get("interests", ""),
         voice_a_id=int(data["voice_a_id"]),
         voice_b_id=int(data["voice_b_id"]),
     )
@@ -146,6 +148,12 @@ def radio_voices():
 # 画面(HTML)
 # ---------------------------------------------------------------------------
 @app.route("/")
+@require_login_page
+def page_home():
+    return app.send_static_file("home.html")
+
+
+@app.route("/recipe")
 @require_login_page
 def page_recipe():
     return app.send_static_file("index.html")
@@ -236,6 +244,10 @@ def create_meal_log():
     if missing:
         return jsonify({"error": f"不足しているフィールド: {missing}"}), 400
 
+    diary_note = data.get("diary_note", "").strip()
+    if not diary_note:
+        return jsonify({"error": "今日、DJたちに教えたいことを入力してください"}), 400
+
     user_id = session["user_id"]
 
     # 記録した時点でアクティブな目標のIDを一緒に保存しておく（目標ごとの進捗集計に使う）
@@ -252,6 +264,9 @@ def create_meal_log():
         actual_calories=int(data["actual_calories"]),
         goal_id=goal_id,
     )
+    # 食事ログを書くタイミングで一緒に記録してもらうことで、書き忘れを防ぐ
+    # (以前はラジオ画面に別の入力欄があったが、そちらは廃止した)
+    auth_service.update_pending_diary_note(user_id, diary_note)
     radio_service.maybe_generate_in_background(user_id)
     return jsonify(log), 201
 
@@ -390,6 +405,8 @@ def radio_latest():
             "script": episode["script"],
             "is_saved": episode["is_saved"],
             "is_shared": episode.get("is_shared", False),
+            "shared_display_name": episode.get("shared_display_name"),
+            "shared_comment": episode.get("shared_comment"),
             "audio_url": audio_url,
         }
     })
@@ -416,21 +433,6 @@ def radio_generate():
     return jsonify({"status": "ok", "episode_id": episode["id"]})
 
 
-@app.route("/radio/diary", methods=["GET"])
-@require_login_api
-def get_diary_note():
-    note = auth_service.get_pending_diary_note(session["user_id"])
-    return jsonify({"note": note})
-
-
-@app.route("/radio/diary", methods=["POST"])
-@require_login_api
-def update_diary_note():
-    data = request.get_json(silent=True) or {}
-    auth_service.update_pending_diary_note(session["user_id"], data.get("note", ""))
-    return jsonify({"status": "ok"})
-
-
 @app.route("/radio/share", methods=["POST"])
 @require_login_api
 def radio_share():
@@ -438,7 +440,9 @@ def radio_share():
     episode_id = data.get("episode_id")
     if not episode_id:
         return jsonify({"error": "episode_id が必要です"}), 400
-    radio_episode_repository.mark_shared(session["user_id"], episode_id)
+    display_name = data.get("display_name", "").strip()[:30]
+    comment = data.get("comment", "").strip()[:200]
+    radio_episode_repository.mark_shared(session["user_id"], episode_id, display_name, comment)
     return jsonify({"status": "ok"})
 
 
@@ -462,6 +466,8 @@ def discover_feed():
             "created_at": ep["created_at"],
             "script": ep["script"],
             "audio_url": radio_episode_repository.get_audio_url(ep["storage_path"]),
+            "display_name": ep.get("shared_display_name") or "匿名",
+            "comment": ep.get("shared_comment") or "",
         })
     return jsonify({"episodes": result})
 
