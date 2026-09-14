@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>みんなのラジオ(実験中) - 置き換えダイエット</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>body{font-family:'Zen Kaku Gothic New',sans-serif;}</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="navbar" id="nav"></div>
+
+  <div class="eyebrow">実験中の機能</div>
+  <h1>みんなのラジオ</h1>
+  <p class="sub">みんなが「共有する」を選んだ回が、匿名で流れてきます(投稿者は分かりません)</p>
+
+  <div id="feed"></div>
+  <p id="loading" class="text-secondary small text-center py-3">読み込み中...</p>
+  <p id="no-more" class="text-secondary small text-center py-3" style="display:none;">これ以上ありません</p>
+</div>
+
+<script src="nav.js"></script>
+<script>
+renderNav("discover");
+
+const feedEl = document.getElementById("feed");
+const loadingEl = document.getElementById("loading");
+const noMoreEl = document.getElementById("no-more");
+
+let cursor = null;
+let loading = false;
+let done = false;
+let currentlyPlaying = null;
+
+// 画面に映っている音声を自動再生し、画面から外れたら止める(ショート動画のような挙動)。
+// ブラウザによっては、ユーザーが一度もクリックしていないと自動再生がブロックされることがある。
+// その場合は再生ボタンを手動で押せば聴ける(controlsは残してあるので手動操作も可能)。
+const autoplayObserver = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((entry) => {
+      const audio = entry.target;
+      if (entry.isIntersecting) {
+        if (currentlyPlaying && currentlyPlaying !== audio) {
+          currentlyPlaying.pause();
+        }
+        audio.play().catch(() => {});
+        currentlyPlaying = audio;
+      } else {
+        audio.pause();
+        if (currentlyPlaying === audio) currentlyPlaying = null;
+      }
+    });
+  },
+  { threshold: 0.6 }
+);
+
+function renderEpisode(ep) {
+  // 台本(ep.script)には、他ユーザーが自由入力した文章(今日のメモ等)が混ざりうるため、
+  // innerHTMLでの直接埋め込みはせず、textContentで安全に挿入する(XSS対策)。
+  const card = document.createElement("div");
+  card.className = "card shadow-sm border-0 mb-3";
+
+  const body = document.createElement("div");
+  body.className = "card-body";
+
+  const audio = document.createElement("audio");
+  audio.controls = true;
+  audio.className = "w-100 mb-2";
+  audio.src = ep.audio_url;
+
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.className = "small text-secondary";
+  summary.style.cursor = "pointer";
+  summary.textContent = "台本を見る";
+
+  const scriptBox = document.createElement("div");
+  scriptBox.className = "bg-light rounded p-3 small text-secondary mt-2";
+  scriptBox.style.whiteSpace = "pre-wrap";
+  scriptBox.style.maxHeight = "200px";
+  scriptBox.style.overflowY = "auto";
+  scriptBox.textContent = ep.script;
+
+  details.appendChild(summary);
+  details.appendChild(scriptBox);
+  body.appendChild(audio);
+  body.appendChild(details);
+  card.appendChild(body);
+  feedEl.appendChild(card);
+  autoplayObserver.observe(audio);
+}
+
+async function loadMore() {
+  if (loading || done) return;
+  loading = true;
+  loadingEl.style.display = "block";
+
+  const url = cursor ? `/discover/feed?before=${encodeURIComponent(cursor)}` : "/discover/feed";
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (data.episodes.length === 0) {
+    done = true;
+    loadingEl.style.display = "none";
+    noMoreEl.style.display = "block";
+    loading = false;
+    return;
+  }
+
+  data.episodes.forEach(renderEpisode);
+  cursor = data.episodes[data.episodes.length - 1].created_at;
+  loadingEl.style.display = "none";
+  loading = false;
+}
+
+// 無限スクロール: ページの下端に近づいたら次のページを読み込む
+window.addEventListener("scroll", () => {
+  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) {
+    loadMore();
+  }
+});
+
+loadMore();
+</script>
+</body>
+</html>
