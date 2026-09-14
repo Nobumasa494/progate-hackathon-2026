@@ -115,29 +115,30 @@
 
       <audio id="player" controls class="w-100 mb-3"></audio>
 
-      <div class="mb-3">
-        <label for="diary-note" class="form-label small fw-bold text-secondary">今日、DJたちに教えたいことある?</label>
-        <textarea id="diary-note" class="form-control" rows="2" placeholder="面白かったこと、愚痴りたいこと、なんでも"></textarea>
-        <div class="d-flex justify-content-between align-items-center mt-1">
-          <span id="diary-saved" class="text-secondary small" style="display:none;">保存しました</span>
-          <button id="diary-save-btn" class="btn btn-outline-secondary btn-sm ms-auto">保存する</button>
-        </div>
-      </div>
-
       <button class="btn btn-radio w-100 fw-bold" id="generate-btn">今日のラジオを作る</button>
       <p id="generating" class="text-secondary small mt-2 mb-0" style="display:none;">生成中です。1〜2分ほどかかります...</p>
       <p id="limit-reached" class="text-secondary small mt-2 mb-0" style="display:none;">今日の生成回数の上限に達しました。</p>
-      <p class="text-secondary small mt-2 mb-0">※食事ログを記録すると、上限に達していなければ自動でも生成が始まります(1日2回まで)</p>
+      <p class="text-secondary small mt-2 mb-0">※食事ログ画面で「今日、DJたちに教えたいこと」を記録すると、上限に達していなければ自動で生成が始まります(1日2回まで)</p>
     </div>
   </div>
 
   <div class="card shadow-sm border-0 mb-3" id="player-area" style="display:none;">
     <div class="card-body">
       <a id="download-link" class="btn btn-outline-secondary btn-sm mb-3" download="radio-episode.wav">この音声を保存する</a>
-      <button id="share-btn" class="btn btn-outline-secondary btn-sm mb-3 ms-2">みんなに共有する</button>
-      <span id="shared-label" class="badge text-bg-light border ms-2 mb-3" style="display:none;">共有済み(匿名で公開中)</span>
+
+      <div id="share-form" class="mb-3">
+        <label class="form-label small fw-bold text-secondary d-block mb-1">みんなに共有する(任意)</label>
+        <input id="share-name" class="form-control form-control-sm mb-2" type="text" maxlength="30" placeholder="表示名(空欄なら匿名)">
+        <textarea id="share-comment" class="form-control form-control-sm mb-2" rows="2" maxlength="200" placeholder="ひとこと(任意)"></textarea>
+        <button id="share-btn" class="btn btn-outline-secondary btn-sm">この回を共有する</button>
+      </div>
+      <div id="shared-info" class="mb-3" style="display:none;">
+        <span class="badge text-bg-light border">共有済み(公開中)</span>
+        <p id="shared-summary" class="text-secondary small mt-2 mb-0"></p>
+      </div>
+
       <p class="text-secondary small">
-        ※共有すると、体重や食事内容も含めて誰でも聞けるようになります(投稿者が誰かは分かりません)
+        ※共有すると、体重や食事内容も含めて誰でも聞けるようになります。表示名・ひとことは空欄のままでも共有できます(その場合は匿名で公開されます)。
       </p>
       <h3 class="h6 fw-bold">台本</h3>
       <div class="bg-light rounded p-3 small text-secondary" id="script-text" style="white-space:pre-wrap;max-height:260px;overflow-y:auto;"></div>
@@ -149,7 +150,7 @@
 
 <script src="nav.js"></script>
 <script>
-renderNav("");
+renderNav("radio");
 
 const generateBtn = document.getElementById("generate-btn");
 const generatingEl = document.getElementById("generating");
@@ -157,8 +158,12 @@ const limitReachedEl = document.getElementById("limit-reached");
 const playerArea = document.getElementById("player-area");
 const player = document.getElementById("player");
 const downloadLink = document.getElementById("download-link");
+const shareForm = document.getElementById("share-form");
+const shareNameInput = document.getElementById("share-name");
+const shareCommentInput = document.getElementById("share-comment");
 const shareBtn = document.getElementById("share-btn");
-const sharedLabel = document.getElementById("shared-label");
+const sharedInfo = document.getElementById("shared-info");
+const sharedSummary = document.getElementById("shared-summary");
 let currentEpisodeId = null;
 const scriptText = document.getElementById("script-text");
 const emptyEl = document.getElementById("empty");
@@ -203,20 +208,28 @@ async function loadLatest() {
   scriptText.textContent = data.episode.script;
 
   currentEpisodeId = data.episode.id;
-  shareBtn.style.display = data.episode.is_shared ? "none" : "inline-block";
-  sharedLabel.style.display = data.episode.is_shared ? "inline-block" : "none";
+  shareForm.style.display = data.episode.is_shared ? "none" : "block";
+  sharedInfo.style.display = data.episode.is_shared ? "block" : "none";
+  if (data.episode.is_shared) {
+    const name = data.episode.shared_display_name || "匿名";
+    const comment = data.episode.shared_comment;
+    sharedSummary.textContent = comment ? `${name}: ${comment}` : `${name}として公開中`;
+  }
 }
 
 shareBtn.addEventListener("click", async () => {
   if (!currentEpisodeId) return;
-  if (!confirm("この回を、誰でも聞けるように共有します(投稿者は匿名)。よろしいですか?")) return;
+  if (!confirm("この回を、誰でも聞けるように共有します。よろしいですか?")) return;
   await fetch("/radio/share", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ episode_id: currentEpisodeId }),
+    body: JSON.stringify({
+      episode_id: currentEpisodeId,
+      display_name: shareNameInput.value.trim(),
+      comment: shareCommentInput.value.trim(),
+    }),
   });
-  shareBtn.style.display = "none";
-  sharedLabel.style.display = "inline-block";
+  await loadLatest();
 });
 
 // 今日もう出来ているかどうかで、ボタンの役割を切り替える。
@@ -266,27 +279,6 @@ async function pollStatus() {
 loadLatest();
 pollStatus();
 setInterval(pollStatus, 5000);
-
-const diaryNoteEl = document.getElementById("diary-note");
-const diarySavedEl = document.getElementById("diary-saved");
-
-async function loadDiaryNote() {
-  const res = await fetch("/radio/diary");
-  const data = await res.json();
-  diaryNoteEl.value = data.note || "";
-}
-
-document.getElementById("diary-save-btn").addEventListener("click", async () => {
-  diarySavedEl.style.display = "none";
-  await fetch("/radio/diary", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ note: diaryNoteEl.value }),
-  });
-  diarySavedEl.style.display = "inline";
-});
-
-loadDiaryNote();
 </script>
 </body>
 </html>

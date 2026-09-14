@@ -16,6 +16,17 @@
   --weight: #2e7d4f; --weight-bg: #e3f3e7;
   --warn: #c1502e; --warn-bg: #fbe7e0;
   --down: #2e7d4f; --up: #c1502e;
+
+  --ai-a: #2e7d4f; --ai-b: #17a589; --ai-c: #7c5cbf;
+  --ai-gradient: linear-gradient(135deg, var(--ai-a), var(--ai-b) 55%, var(--ai-c));
+
+  /* Bootstrapの色をアプリの配色に上書きする */
+  --bs-primary: #2e7d4f;
+  --bs-primary-rgb: 46,125,79;
+  --bs-body-font-family: 'Zen Kaku Gothic New', sans-serif;
+  --bs-border-radius: 14px;
+  --bs-border-radius-lg: 20px;
+  --bs-border-radius-pill: 999px;
 }
 
 *{box-sizing:border-box;}
@@ -65,3 +76,30 @@ ul,ol{margin:0;padding-left:20px;font-size:14px;line-height:1.9;}
 .stat .k{font-size:12px;color:var(--ink-dim);margin-bottom:2px;}
 .stat .v{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:20px;color:var(--primary-dark);}
 .note{margin-top:20px;border-radius:14px;padding:12px 16px;font-size:13px;border:1px solid;}
+
+/* AI演出: グラデーション・光る演出・キラキラアイコン */
+.ai-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--ai-gradient);color:#fff;font-weight:700;font-size:12px;
+  padding:6px 14px;border-radius:999px;
+  box-shadow:0 4px 14px -4px rgba(46,125,79,0.55);
+}
+.ai-badge svg{flex:0 0 auto;}
+.ai-glow-btn{
+  background:var(--ai-gradient)!important;border:none!important;color:#fff!important;
+  box-shadow:0 6px 20px -6px rgba(46,125,79,0.6);
+  position:relative;overflow:hidden;
+}
+.ai-glow-btn:hover{filter:brightness(1.05);}
+.ai-card{
+  position:relative;border:1px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    var(--ai-gradient) border-box;
+}
+.ai-title{
+  background:var(--ai-gradient);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.sparkle{display:inline-block;animation:sparkle-pulse 1.8s ease-in-out infinite;}
+@keyframes sparkle-pulse{0%,100%{opacity:0.55;transform:scale(0.9);}50%{opacity:1;transform:scale(1.1);}}

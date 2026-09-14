@@ -1,7 +1,6 @@
 """深夜ラジオ機能(実験中)の台本生成プロンプト。
 
-voicevox_radio_test.py で試作・検証したプロンプトを、本番のradio_service.pyと
-テストスクリプト(voicevox_radio_test.py)の両方から使い回せるように切り出したもの。
+radio_service.pyから使う。
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ DJ A: でしょ?でも続いてるってことは、何かきっかけがあっ�
 1. 「よく知られている当たり前の話」ではなく、聞いた人が「え、知らなかった」「それ怖い」「それ面白い」
    と驚くレベルの、意外性のある内容にする
 2. 一文で終わらせず、DJ同士の驚き→深掘りの質問→さらなる驚き、という段階を踏んで広げる
-3. 本人の好きなことは、こじつけでなく自然に繋げられる場合のみ繋げる
+3. 本人の好きなこと・興味があることは、こじつけでなく自然に繋げられる場合のみ繋げる
 
 【その他のルール】
 4. 具体的な事実(料理名・kcal・kg数)は、入れた方が自然なら入れてよいが、必須ではない。
@@ -43,7 +42,7 @@ DJ A: でしょ?でも続いてるってことは、何かきっかけがあっ�
 
 【展開の設計】
 台本は「フック(始まり) → 広げる(具体的な出来事・雑学) → 引き(終わり)」の流れにする。
-使える材料は次の4つ: 雑学 / 前回までの話 / 体重やkcalの数字 / 本人の好きなこと。
+使える材料は次の4つ: 雑学 / 前回までの話 / 体重やkcalの数字 / 本人の好きなこと・興味があること。
 始まりと終わりで、必ず違う材料を使うこと(同じ材料を始まりと終わりの両方で使わない)。
 どの材料を始まり・終わりに使うかは、その回に渡されたデータの中で一番意外性が強い・
 引きが作りやすいものを選ぶこと。言い回しの型を覚えるのではなく、材料の組み合わせを毎回変えることで
@@ -82,6 +81,7 @@ def build_user_prompt(
     recent_scripts: list[str],
     memories: list[str] | None = None,
     diary_note: str = "",
+    interests: str = "",
 ) -> str:
     """実データから、OpenAIに渡すUSER_PROMPTを組み立てる。
 
@@ -90,11 +90,17 @@ def build_user_prompt(
     recent_scripts   : radio_episode_repository.fetch_recent_scripts() の戻り値(新しい順)
     memories         : radio_memory_repository.fetch_top_memories() の戻り値(重要度×新しさの上位)
     diary_note       : 「今日、DJたちに教えたいことある?」への回答(本人が書いた生の言葉)
+    interests        : プロフィール画面で設定する「興味があること」(空文字もありうる)。
+                        favorite_thingsと同じく、呼び出し側(radio_service.py)で
+                        頻度を間引いてから渡される想定。
     """
     parts = [f"今日の出来事:\n{events_text}"]
 
     if favorite_things:
         parts.append(f"本人の好きなこと:\n- {favorite_things}")
+
+    if interests:
+        parts.append(f"本人が興味があること:\n- {interests}")
 
     if diary_note:
         parts.append(

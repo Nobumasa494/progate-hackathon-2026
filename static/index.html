@@ -5,23 +5,48 @@
 <title>レシピ提案 - 置き換えダイエット</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<style>
+  .search-row{display:flex;gap:8px;margin-bottom:18px;}
+  .search-row .input{padding-left:20px;}
+  .search-btn{width:48px;height:48px;flex:0 0 auto;border-radius:50%;background:var(--ai-gradient);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 16px -6px rgba(46,125,79,0.6);}
+  .swap-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .swap-arrow{color:var(--primary);flex:0 0 auto;}
+  .from-dish{font-size:13px;color:var(--ink-dim);}
+  .from-kcal{color:var(--warn);font-weight:700;}
+  .to-name{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:19px;color:var(--primary-dark);}
+  .to-kcal{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;color:var(--primary);}
+  .ingredient-list li{margin-bottom:4px;}
+</style>
 </head>
 <body>
 <div class="wrap">
-  <div class="navbar" id="nav"></div>
+  <div class="appbar">
+    <div class="appbar-icon">
+      <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9h14a7 7 0 0 1-14 0Z"/><path d="M6 9c0-2 .5-3.5 1.5-4.5M13.5 4.5C14.5 5.5 15 7 15 9"/></svg>
+    </div>
+    <div class="appbar-title">かるレシピ</div>
+  </div>
 
-  <div class="eyebrow" style="color:var(--recipe)">AI置き換え提案</div>
+  <div class="ai-badge mb-2">
+    <svg class="sparkle" width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l1.6 5.4L17 9l-5.4 1.6L10 16l-1.6-5.4L3 9l5.4-1.6Z"/></svg>
+    AI低糖質提案
+  </div>
   <h1>食べたい料理名を入力してください</h1>
   <p class="sub">カロリーを抑えた置き換えレシピを、あなたの目標に合わせてAIが提案します</p>
 
-  <div class="inputrow">
+  <div class="search-row">
     <input class="input" id="dish-input" type="text" placeholder="例: かつ丼">
-    <button class="btn" id="submit-btn" style="background:var(--recipe);color:#fff;">提案してもらう</button>
+    <button class="search-btn" id="submit-btn" aria-label="提案してもらう">
+      <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10h12M11 5l5 5-5 5"/></svg>
+    </button>
   </div>
 
   <div id="result"></div>
 </div>
+
+<div class="navbar" id="nav"></div>
 
 <script src="nav.js"></script>
 <script>
@@ -31,38 +56,76 @@ const input = document.getElementById("dish-input");
 const button = document.getElementById("submit-btn");
 const result = document.getElementById("result");
 
+function el(tag, props = {}, children = []) {
+  const node = document.createElement(tag);
+  Object.entries(props).forEach(([k, v]) => {
+    if (k === "className") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else node.setAttribute(k, v);
+  });
+  children.forEach(c => node.appendChild(c));
+  return node;
+}
+
 function renderCard(data) {
-  const cappedNote = data.is_capped
-    ? `<div class="note" style="background:var(--warn-bg);border-color:var(--warn);color:var(--warn);">
-         本来は1日${Math.round(data.target_daily_reduction_kcal_used ? data.target_daily_reduction_kcal_used : 0)}kcal以上の削減が必要なペースですが、
-         健康のため安全な範囲(${data.target_daily_reduction_kcal_used}kcal相当)で提案しています。
-       </div>`
-    : "";
+  result.innerHTML = "";
+  const card = el("div", { className: "card" });
 
-  result.innerHTML = `
-    <div class="card">
-      <div class="sub" style="margin-bottom:2px;">${data.original_dish}(${data.original_calories}kcal) の代わりに</div>
-      <div style="font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:22px;color:var(--recipe);margin:2px 0 2px;">${data.replacement_name}</div>
-      <div class="sub" style="margin-bottom:18px;">${data.replacement_calories}kcal</div>
+  const swapRow = el("div", { className: "swap-row" });
+  const fromCol = el("div");
+  fromCol.appendChild(el("div", { className: "from-dish", text: data.original_dish }));
+  fromCol.appendChild(el("div", { className: "from-kcal", text: `${data.original_calories}kcal` }));
+  swapRow.appendChild(fromCol);
+  swapRow.appendChild(el("div", { className: "swap-arrow" }, [(() => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 20 20"); svg.setAttribute("width", "20"); svg.setAttribute("height", "20");
+    svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor"); svg.setAttribute("stroke-width", "2"); svg.setAttribute("stroke-linecap", "round");
+    svg.innerHTML = '<path d="M4 10h12M11 5l5 5-5 5"/>';
+    return svg;
+  })()]));
+  const toCol = el("div");
+  toCol.appendChild(el("div", { className: "to-name", text: data.replacement_name }));
+  toCol.appendChild(el("div", { className: "to-kcal", text: `${data.replacement_calories}kcal` }));
+  swapRow.appendChild(toCol);
+  card.appendChild(swapRow);
 
-      <h3 class="sec">材料</h3>
-      <ul>${data.ingredients.map(i => `<li>${i.name} ${i.amount}</li>`).join("")}</ul>
+  card.appendChild(el("h3", { className: "sec", text: "材料" }));
+  const ul = el("ul", { className: "ingredient-list" });
+  data.ingredients.forEach(i => ul.appendChild(el("li", { text: `${i.name} ${i.amount}` })));
+  card.appendChild(ul);
 
-      <h3 class="sec">作り方</h3>
-      <ol>${data.steps.map(s => `<li>${s}</li>`).join("")}</ol>
+  card.appendChild(el("h3", { className: "sec", text: "作り方" }));
+  const ol = el("ol");
+  data.steps.forEach(s => ol.appendChild(el("li", { text: s })));
+  card.appendChild(ol);
 
-      <div class="statrow">
-        <div class="stat" style="background:var(--recipe-bg);"><div class="k">削減カロリー</div><div class="v" style="color:var(--recipe);">${data.calorie_diff}kcal</div></div>
-        <div class="stat" style="background:var(--recipe-bg);"><div class="k">材料費目安</div><div class="v" style="color:var(--recipe);">${data.estimated_cost_yen}円</div></div>
-      </div>
+  const statrow = el("div", { className: "statrow" });
+  const stat1 = el("div", { className: "stat" });
+  stat1.appendChild(el("div", { className: "k", text: "削減カロリー" }));
+  stat1.appendChild(el("div", { className: "v", text: `${data.calorie_diff}kcal` }));
+  const stat2 = el("div", { className: "stat" });
+  stat2.appendChild(el("div", { className: "k", text: "材料費目安" }));
+  stat2.appendChild(el("div", { className: "v", text: `${data.estimated_cost_yen}円` }));
+  statrow.appendChild(stat1);
+  statrow.appendChild(stat2);
+  card.appendChild(statrow);
 
-      ${cappedNote}
+  if (data.is_capped) {
+    const note = el("div", { className: "note" });
+    note.style.background = "var(--warn-bg)"; note.style.borderColor = "var(--warn)"; note.style.color = "var(--warn)";
+    note.textContent = `本来は1日${Math.round(data.target_daily_reduction_kcal_used || 0)}kcal以上の削減が必要なペースですが、健康のため安全な範囲(${data.target_daily_reduction_kcal_used}kcal相当)で提案しています。`;
+    card.appendChild(note);
+  }
 
-      <div class="note" style="background:var(--logs-bg);border-color:var(--logs);color:var(--logs);">
-        この提案はあなたの最新の提案として保存されました。<a href="/record">食事ログ画面</a>から記録できます。
-      </div>
-    </div>
-  `;
+  result.appendChild(card);
+
+  const cta = el("button", { className: "btn ai-glow-btn", text: "この置き換えレシピを保存", style: "width:100%;" });
+  cta.addEventListener("click", () => { window.location.href = "/record"; });
+  result.appendChild(cta);
+
+  const hint = el("p", { className: "sub", text: "保存すると、食事ログ画面から実際に食べたかどうかを記録できます。" });
+  hint.style.textAlign = "center"; hint.style.marginTop = "10px";
+  result.appendChild(hint);
 }
 
 async function suggest() {

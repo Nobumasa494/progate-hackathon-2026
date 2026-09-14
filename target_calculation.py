@@ -16,7 +16,7 @@
     result = enrich_goal(goal_dict)
 
     # コマンドラインから
-    python target_calculation.py sample_latest_goal.json
+    python target_calculation.py <goal.json>
 """
 
 from __future__ import annotations
@@ -146,7 +146,7 @@ def main() -> None:
     """コマンドラインから実行する場合のエントリーポイント。
 
     使い方:
-        python target_calculation.py sample_latest_goal.json
+        python target_calculation.py <goal.json>
         cat goal.json | python target_calculation.py -
     """
     if len(sys.argv) != 2:

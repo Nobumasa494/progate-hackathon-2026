@@ -7,7 +7,12 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<style>body{font-family:'Zen Kaku Gothic New',sans-serif;}</style>
+<style>
+  body{font-family:'Zen Kaku Gothic New',sans-serif;}
+  .swipe-card{touch-action:pan-y;position:relative;}
+  .swipe-hint{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .swipe-hint button{border:none;background:none;color:var(--ink-dim);font-size:18px;line-height:1;padding:0 4px;}
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -16,6 +21,13 @@
   <div class="eyebrow">実験中の機能</div>
   <h1>みんなのラジオ</h1>
   <p class="sub">みんなが「共有する」を選んだ回が、匿名で流れてきます(投稿者は分かりません)</p>
+
+  <div id="swipe-tip" class="card border-0 bg-light mb-3" style="display:none;">
+    <div class="card-body py-2 swipe-hint">
+      <span class="small text-secondary">聞き終えたら、カードを左右にスワイプすると自分の画面から消せます</span>
+      <button id="swipe-tip-close" aria-label="閉じる">&times;</button>
+    </div>
+  </div>
 
   <div id="feed"></div>
   <p id="loading" class="text-secondary small text-center py-3">読み込み中...</p>
@@ -29,11 +41,47 @@ renderNav("discover");
 const feedEl = document.getElementById("feed");
 const loadingEl = document.getElementById("loading");
 const noMoreEl = document.getElementById("no-more");
+const swipeTipEl = document.getElementById("swipe-tip");
 
 let cursor = null;
 let loading = false;
 let done = false;
 let currentlyPlaying = null;
+
+// 「消す」はサーバーには送らず、このブラウザだけで覚えておく(他の人には見え続ける)。
+const DISMISSED_KEY = "discover_dismissed_episode_ids";
+
+function loadDismissedIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]"));
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function dismissEpisode(id) {
+  try {
+    const ids = loadDismissedIds();
+    ids.add(id);
+    // 際限なく増えないよう、直近500件だけ残す
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(ids).slice(-500)));
+  } catch (e) {
+    // localStorageが使えない環境(プライベートモード等)でも失敗させない
+  }
+}
+
+const dismissedIds = loadDismissedIds();
+
+try {
+  if (!localStorage.getItem("discover_swipe_tip_seen")) {
+    swipeTipEl.style.display = "block";
+  }
+} catch (e) {}
+
+document.getElementById("swipe-tip-close").addEventListener("click", () => {
+  swipeTipEl.style.display = "none";
+  try { localStorage.setItem("discover_swipe_tip_seen", "1"); } catch (e) {}
+});
 
 // 画面に映っている音声を自動再生し、画面から外れたら止める(ショート動画のような挙動)。
 // ブラウザによっては、ユーザーが一度もクリックしていないと自動再生がブロックされることがある。
@@ -57,19 +105,77 @@ const autoplayObserver = new IntersectionObserver(
   { threshold: 0.6 }
 );
 
+// カードを左右にドラッグし、一定距離を超えたら「消す」扱いにする(スワイプ操作)。
+// audio(再生バーの操作)・details(台本の開閉)の上から始まったドラッグは無視する。
+function attachSwipeToDismiss(card, audio, episodeId) {
+  let startX = 0;
+  let dx = 0;
+  let dragging = false;
+  const threshold = 90;
+
+  card.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("audio") || e.target.closest("details")) return;
+    dragging = true;
+    startX = e.clientX;
+    card.style.transition = "none";
+    card.setPointerCapture(e.pointerId);
+  });
+
+  card.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    dx = e.clientX - startX;
+    card.style.transform = `translateX(${dx}px)`;
+    card.style.opacity = String(Math.max(0.15, 1 - Math.abs(dx) / 280));
+  });
+
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    card.style.transition = "transform .2s ease, opacity .2s ease";
+    if (Math.abs(dx) > threshold) {
+      const dir = dx > 0 ? 1 : -1;
+      card.style.transform = `translateX(${dir * 600}px)`;
+      card.style.opacity = "0";
+      audio.pause();
+      if (currentlyPlaying === audio) currentlyPlaying = null;
+      autoplayObserver.unobserve(audio);
+      dismissEpisode(episodeId);
+      setTimeout(() => card.remove(), 200);
+    } else {
+      card.style.transform = "translateX(0)";
+      card.style.opacity = "1";
+    }
+    dx = 0;
+  }
+
+  card.addEventListener("pointerup", endDrag);
+  card.addEventListener("pointercancel", endDrag);
+}
+
 function renderEpisode(ep) {
   // 台本(ep.script)には、他ユーザーが自由入力した文章(今日のメモ等)が混ざりうるため、
   // innerHTMLでの直接埋め込みはせず、textContentで安全に挿入する(XSS対策)。
   const card = document.createElement("div");
-  card.className = "card shadow-sm border-0 mb-3";
+  card.className = "card shadow-sm border-0 mb-3 swipe-card";
 
   const body = document.createElement("div");
   body.className = "card-body";
+
+  const nameEl = document.createElement("div");
+  nameEl.className = "small fw-bold text-secondary mb-1";
+  nameEl.textContent = ep.display_name;
 
   const audio = document.createElement("audio");
   audio.controls = true;
   audio.className = "w-100 mb-2";
   audio.src = ep.audio_url;
+
+  let commentEl = null;
+  if (ep.comment) {
+    commentEl = document.createElement("p");
+    commentEl.className = "small mb-2";
+    commentEl.textContent = ep.comment;
+  }
 
   const details = document.createElement("details");
   const summary = document.createElement("summary");
@@ -86,11 +192,14 @@ function renderEpisode(ep) {
 
   details.appendChild(summary);
   details.appendChild(scriptBox);
+  body.appendChild(nameEl);
   body.appendChild(audio);
+  if (commentEl) body.appendChild(commentEl);
   body.appendChild(details);
   card.appendChild(body);
   feedEl.appendChild(card);
   autoplayObserver.observe(audio);
+  attachSwipeToDismiss(card, audio, ep.id);
 }
 
 async function loadMore() {
@@ -110,10 +219,20 @@ async function loadMore() {
     return;
   }
 
-  data.episodes.forEach(renderEpisode);
+  let renderedCount = 0;
+  data.episodes.forEach((ep) => {
+    if (dismissedIds.has(ep.id)) return; // 以前このブラウザで「消した」回はそもそも表示しない
+    renderEpisode(ep);
+    renderedCount++;
+  });
   cursor = data.episodes[data.episodes.length - 1].created_at;
   loadingEl.style.display = "none";
   loading = false;
+
+  // このページが全部「消し済み」だった場合、画面が空のままにならないよう続けて次を読み込む
+  if (renderedCount === 0) {
+    loadMore();
+  }
 }
 
 // 無限スクロール: ページの下端に近づいたら次のページを読み込む

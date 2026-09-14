@@ -168,6 +168,14 @@ def _maybe_generate_reflection(user_id: str, episode_count: int) -> None:
 
 MAX_EPISODES_PER_DAY = 5
 
+# 「好きなこと」「興味があること」は毎回プロンプトに渡すと、AIにとって一番使いやすい
+# 話題になってしまい、結果的に同じ話ばかりになる。そのため、コード側で頻度そのものを
+# 制限する(AIに「自然な時だけ使って」と指示するだけでは抑えきれなかったため)。
+# 「一度使ったら二度と使わない」にすると、今度はせっかく書いた入力が二度と日の目を
+# 見なくなってしまうので、そうはせず、間隔を空けてたまに登場する形にする。
+FAVORITE_THINGS_INTERVAL = 20
+INTERESTS_INTERVAL = 20
+
 
 def _today_start_iso() -> str:
     """今日の0時(UTC)をISO8601文字列で返す。"""
@@ -225,12 +233,24 @@ def _generate_todays_episode(user_id: str) -> dict:
     _check_and_save_milestones(user_id, profile)
 
     events_text = _build_events_text(user_id)
-    favorite_things = profile.get("favorite_things", "")
+    episode_number = profile.get("radio_episode_count", 0) + 1
+    favorite_things = (
+        profile.get("favorite_things", "") if episode_number % FAVORITE_THINGS_INTERVAL == 0 else ""
+    )
+    # 「好きなこと」と同じ回に重ならないよう、半周期ずらして登場させる
+    # (2つとも間引きつつ、出てくる時は毎回違う話題になるようにするため)。
+    interests = (
+        profile.get("interests", "")
+        if episode_number % INTERESTS_INTERVAL == INTERESTS_INTERVAL // 2
+        else ""
+    )
     recent_scripts = radio_episode_repository.fetch_recent_scripts(user_id, limit=2)
     memories = radio_memory_repository.fetch_top_memories(user_id, limit=3)
     diary_note = profile.get("pending_diary_note", "")
 
-    user_prompt = radio_prompt.build_user_prompt(events_text, favorite_things, recent_scripts, memories, diary_note)
+    user_prompt = radio_prompt.build_user_prompt(
+        events_text, favorite_things, recent_scripts, memories, diary_note, interests
+    )
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     response = client.chat.completions.create(
@@ -257,11 +277,10 @@ def _generate_todays_episode(user_id: str) -> dict:
         audio_bytes=audio_bytes,
     )
 
-    episode_count = profile.get("radio_episode_count", 0) + 1
-    updates = {"radio_episode_count": episode_count}
+    updates = {"radio_episode_count": episode_number}
     if diary_note:
         updates["pending_diary_note"] = ""  # 使ったら「今日の分」として空にリセットする
     auth_service.update_profile(user_id, **updates)
-    _maybe_generate_reflection(user_id, episode_count)
+    _maybe_generate_reflection(user_id, episode_number)
 
     return episode
