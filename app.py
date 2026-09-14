@@ -13,7 +13,13 @@ from __future__ import annotations
 import os
 from functools import wraps
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, request, session
+
+# .envの読み込みは、本来ここで明示的に行う。
+# 今はgoal_repositoryなどのimport時の副作用でも読めてしまうが、それに依存すると
+# import順序を変えるだけで壊れるため、app.py自身の責任として先に呼んでおく。
+load_dotenv()
 
 import auth_service
 import goal_repository
