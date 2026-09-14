@@ -432,11 +432,16 @@ def radio_status():
 @app.route("/radio/generate", methods=["POST"])
 @require_login_api
 def radio_generate():
+    """手動生成ボタン。実際の生成は裏スレッドで行い、開始できたかどうかだけをすぐ返す。
+
+    完了を待たずに返すので、生成が終わったかどうかはブラウザ側の/radio/statusの
+    ポーリングで検知してもらう(自動生成と同じ経路)。
+    """
     user_id = session["user_id"]
-    if radio_service.reached_daily_limit(user_id):
-        return jsonify({"error": f"1日に生成できる回数({radio_service.MAX_EPISODES_PER_DAY}回)に達しています"}), 429
-    episode = radio_service.generate_todays_episode(user_id)
-    return jsonify({"status": "ok", "episode_id": episode["id"]})
+    started = radio_service.try_start_generating(user_id)
+    if not started:
+        return jsonify({"error": f"すでに生成中か、1日に生成できる回数({radio_service.MAX_EPISODES_PER_DAY}回)に達しています"}), 429
+    return jsonify({"status": "ok"})
 
 
 @app.route("/radio/share", methods=["POST"])

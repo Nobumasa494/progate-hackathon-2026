@@ -32,6 +32,11 @@ KCAL_MILESTONE_THRESHOLDS = [1000, 5000, 10000, 20000, 50000]
 # サーバーを再起動すると消えるが、生成中かどうかの一時的な表示用なので問題ない。
 _generating_user_ids: set[str] = set()
 
+# 「上限チェック→生成開始」を1つの塊として扱うためのロック。gunicornを--threadsで動かすと
+# 複数リクエストが本当に並列で処理されるため、これが無いと手動生成と自動生成がほぼ同時に来た時に
+# 両方すり抜けて二重生成される可能性がある。
+_generating_lock = threading.Lock()
+
 
 def is_generating(user_id: str) -> bool:
     """今、このユーザーの分を裏で生成中かどうか。"""
@@ -193,39 +198,48 @@ def reached_daily_limit(user_id: str) -> bool:
     return radio_episode_repository.count_episodes_since(user_id, _today_start_iso()) >= MAX_EPISODES_PER_DAY
 
 
-def maybe_generate_in_background(user_id: str) -> None:
-    """今日まだ生成していなければ、裏側で(別スレッドで)生成を開始する。
+def try_start_generating(user_id: str) -> bool:
+    """このユーザーの生成を裏側の別スレッドで開始できるなら、開始する。
 
-    事前生成の仕組み(設計書8章): 食事ログ記録をきっかけに、
-    ユーザーを待たせずに裏で生成しておき、次にアプリを開いたときには出来上がっている状態にする。
-    1日にMAX_EPISODES_PER_DAY回までは自動生成する(それ以上は手動ボタンでのみ生成可能)。
-    リクエストへのレスポンスは待たずに返す(生成の成否はここでは気にしない)。
+    「今日の上限に達していないか」「すでに生成中でないか」の判定と、is_generatingの
+    印を立てる操作を_generating_lockで1つの塊にする。これにより、手動ボタンと
+    自動生成(食事ログ記録)がほぼ同時に来ても、両方すり抜けて二重生成されることはない。
+
+    手動ボタン・自動生成のどちらの経路でも、実際の生成は常にこの関数の中の裏スレッドで
+    行われる。呼び出し元(Flaskのリクエストハンドラ)は、生成の完了を待たずにすぐ制御が
+    返ってくる(gunicornのスレッドを1〜2分間ふさがないようにするため。設計書8章参照)。
+
+    戻り値: 開始できたらTrue。開始できなかった(上限到達 or すでに生成中)場合はFalse。
     """
-    if reached_daily_limit(user_id) or is_generating(user_id):
-        return
+    with _generating_lock:
+        if reached_daily_limit(user_id) or user_id in _generating_user_ids:
+            return False
+        _generating_user_ids.add(user_id)
 
     def _run():
         try:
-            generate_todays_episode(user_id)
+            _generate_todays_episode(user_id)
         except Exception as e:
             # バックグラウンド処理なので、失敗してもリクエストには影響させない。
             # ログにだけ残す(本番ではロガーに置き換える)。
             print(f"[radio] 生成に失敗しました user_id={user_id}: {e}")
+        finally:
+            with _generating_lock:
+                _generating_user_ids.discard(user_id)
 
     threading.Thread(target=_run, daemon=True).start()
+    return True
 
 
-def generate_todays_episode(user_id: str) -> dict:
-    """そのユーザーの今日のエピソードを作り、保存する。戻り値はradio_episodesの行。
+def maybe_generate_in_background(user_id: str) -> None:
+    """今日まだ生成していなければ、裏側で生成を開始する。
 
-    is_generatingの印を、処理の間だけ立てておく(手動ボタン・自動生成どちらの経路でも
-    ここを通るので、/radio/status で一律に生成中かどうか確認できる)。
+    事前生成の仕組み(設計書8章): 食事ログ記録をきっかけに、
+    ユーザーを待たせずに裏で生成しておき、次にアプリを開いたときには出来上がっている状態にする。
+    1日にMAX_EPISODES_PER_DAY回までは自動生成する(それ以上は手動ボタンでのみ生成可能)。
+    開始できるかどうかはtry_start_generating側の判定に任せ、ここでは結果を気にしない。
     """
-    _generating_user_ids.add(user_id)
-    try:
-        return _generate_todays_episode(user_id)
-    finally:
-        _generating_user_ids.discard(user_id)
+    try_start_generating(user_id)
 
 
 def _generate_todays_episode(user_id: str) -> dict:

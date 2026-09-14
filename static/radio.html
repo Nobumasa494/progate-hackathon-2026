@@ -242,17 +242,16 @@ generateBtn.addEventListener("click", async () => {
     player.play();
     return;
   }
+  // /radio/generateは生成の完了を待たず、開始できたかどうかだけをすぐ返す
+  // (裏スレッドで生成するため、gunicornのスレッドを1〜2分間ふさがないようにするため)。
+  // 生成中の表示・完了時の読み込みは、既存のpollStatus()のポーリングにまかせる。
   generateBtn.disabled = true;
-  generatingEl.style.display = "block";
-  setOnAir(true, "REC");
-  try {
-    await fetch("/radio/generate", { method: "POST" });
-    await loadLatest();
-  } finally {
-    generateBtn.disabled = false;
-    generatingEl.style.display = "none";
-    setOnAir(false, "STANDBY");
+  const res = await fetch("/radio/generate", { method: "POST" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.error || "生成を開始できませんでした。しばらくしてからもう一度試してください。");
   }
+  await pollStatus();
 });
 
 // 自動生成(食事ログ記録がきっかけ)が裏で走っているかどうかを、定期的に確認する。
