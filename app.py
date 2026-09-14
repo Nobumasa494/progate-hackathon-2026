@@ -473,4 +473,7 @@ def discover_feed():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8000, debug=True)
+    # デバッグモードは事故で本番に持ち込まないよう、明示的に環境変数で有効化した時だけONにする。
+    # 開発中に使いたい場合は FLASK_DEBUG=1 を .env に設定する。
+    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host="127.0.0.1", port=8000, debug=debug_mode)
