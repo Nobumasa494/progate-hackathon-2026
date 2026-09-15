@@ -22,15 +22,39 @@ DEFAULT_SPEAKER_B = 2  # 四国めたん(ノーマル)
 VOICEVOX_URL = os.environ.get("VOICEVOX_URL", "http://localhost:50021")
 
 
-def wake_up(timeout: int = 180) -> None:
-    """VOICEVOXが休止状態から完全に起きるまで待つ、軽い1回だけのリクエスト。
+def wake_up(timeout: int = 10, retries: int = 15, interval: int = 5) -> None:
+    """VOICEVOXが休止状態から完全に起きるまで待つ、軽いリクエスト。
 
     本番ではVOICEVOXが別サービス(無料枠)で動いており、休止状態からの起動待ちだけで
     50秒以上かかることがある(Renderの無料インスタンスの仕様)。これを呼ばずにいきなり
-    音声合成を8並列で送りつけると、起きかけの不安定な状態に負荷が集中してしまうため、
-    先にこの軽いリクエスト1つだけで完全に起きるのを待ってから、本番の合成を始める。
+    音声合成を並列で送りつけると、起きかけの不安定な状態に負荷が集中してしまうため、
+    先にこの軽いリクエストで完全に起きるのを待ってから、本番の合成を始める。
+
+    起動途中は、応答自体は返ってくるが中身が502(Bad Gateway)ということがある
+    (コンテナがまだポートを開ける前の状態)。ここでraise_for_status()を確認せずに
+    「応答が来た=起きた」と判定すると、まだ起動中なのに合成処理に進んでしまい、
+    そちらも502で失敗する。そのため200が返るまで、一定間隔でリトライする。
+
+    デフォルトは、リクエストを受けたFlaskのスレッドをブロックしない
+    synthesize_script()(ラジオ生成、裏スレッドで実行)向けに、余裕を持たせた値にしている
+    (最悪ケースで15×10+14×5=220秒。Renderの「50秒以上」という説明には上限が
+    書かれていないため、多少余裕を持たせておきたい)。
+
+    一方list_speakers()のように、リクエストを受けたFlaskのスレッドの中で同期的に
+    呼ばれる場合は、待ちすぎるとそのスレッドを長時間塞いでしまうため、呼び出し側で
+    timeout/retriesを短く指定すること。
     """
-    httpx.get(f"{VOICEVOX_URL}/version", timeout=timeout)
+    last_error: Exception | None = None
+    for attempt in range(retries):
+        try:
+            response = httpx.get(f"{VOICEVOX_URL}/version", timeout=timeout)
+            response.raise_for_status()
+            return
+        except Exception as e:
+            last_error = e
+            if attempt < retries - 1:
+                time.sleep(interval)
+    raise last_error
 
 
 def list_speakers() -> list[dict]:
@@ -38,10 +62,22 @@ def list_speakers() -> list[dict]:
 
     戻り値の例:
         [{"name": "四国めたん", "styles": [{"id": 2, "name": "ノーマル"}, ...]}, ...]
+
+    先にwake_up()でVOICEVOXが完全に起きているのを確認してから問い合わせる
+    (起動途中は応答が502になり、それをそのまま.json()すると分かりにくいエラーになるため)。
+
+    ここはリクエストを受けたFlaskのスレッドの中で同期的に呼ばれるため、wake_up()の
+    デフォルト(裏スレッド向けの余裕がある値)は使わず、待ち時間を短め(最悪でも
+    約92秒)に指定している。この画面ではVOICEVOXが起動待ちで長くかかった場合、
+    エラーメッセージを出して他の項目だけ表示する作りになっているため(profile.html参照)、
+    ここで待ちすぎて画面全体を長時間ブロックするより、短めに諦めてエラー表示に
+    切り替える方が体験として良いと判断した。
     """
+    wake_up(timeout=8, retries=8, interval=4)
     # 本番ではVOICEVOXが別サービス(無料枠)で動いており、休止状態からの起動待ちだけで
     # 50秒以上かかることがあるため、短いタイムアウトだと必ず失敗する。長めに取っておく。
     response = httpx.get(f"{VOICEVOX_URL}/speakers", timeout=90)
+    response.raise_for_status()
     speakers = response.json()
     return [
         {

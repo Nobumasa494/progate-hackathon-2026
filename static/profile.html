@@ -71,20 +71,23 @@ function fillVoiceOptions(select, speakers, selectedId) {
 }
 
 async function load() {
-  const [profileRes, voicesRes] = await Promise.all([
-    fetch("/profile/data"),
-    fetch("/radio/voices"),
-  ]);
-
+  const profileRes = await fetch("/profile/data");
   const profile = await profileRes.json();
   favoriteThingsInput.value = profile.favorite_things || "";
   interestsInput.value = profile.interests || "";
 
-  if (voicesRes.ok) {
-    const speakers = await voicesRes.json();
-    fillVoiceOptions(voiceASelect, speakers, profile.voice_a_id);
-    fillVoiceOptions(voiceBSelect, speakers, profile.voice_b_id);
-  } else {
+  // VOICEVOXが起動待ちで長くかかったり、通信が途中で切れたりすることがあるため、
+  // ここが失敗してもプロフィールの他の項目(上のfetch)は表示できるように分けている。
+  try {
+    const voicesRes = await fetch("/radio/voices");
+    if (voicesRes.ok) {
+      const speakers = await voicesRes.json();
+      fillVoiceOptions(voiceASelect, speakers, profile.voice_a_id);
+      fillVoiceOptions(voiceBSelect, speakers, profile.voice_b_id);
+    } else {
+      voicesErrorEl.style.display = "block";
+    }
+  } catch (e) {
     voicesErrorEl.style.display = "block";
   }
 }
