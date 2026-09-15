@@ -22,15 +22,30 @@ DEFAULT_SPEAKER_B = 2  # 四国めたん(ノーマル)
 VOICEVOX_URL = os.environ.get("VOICEVOX_URL", "http://localhost:50021")
 
 
-def wake_up(timeout: int = 180) -> None:
-    """VOICEVOXが休止状態から完全に起きるまで待つ、軽い1回だけのリクエスト。
+def wake_up(timeout: int = 180, retries: int = 10, interval: int = 5) -> None:
+    """VOICEVOXが休止状態から完全に起きるまで待つ、軽いリクエスト。
 
     本番ではVOICEVOXが別サービス(無料枠)で動いており、休止状態からの起動待ちだけで
     50秒以上かかることがある(Renderの無料インスタンスの仕様)。これを呼ばずにいきなり
-    音声合成を8並列で送りつけると、起きかけの不安定な状態に負荷が集中してしまうため、
-    先にこの軽いリクエスト1つだけで完全に起きるのを待ってから、本番の合成を始める。
+    音声合成を並列で送りつけると、起きかけの不安定な状態に負荷が集中してしまうため、
+    先にこの軽いリクエストで完全に起きるのを待ってから、本番の合成を始める。
+
+    起動途中は、応答自体は返ってくるが中身が502(Bad Gateway)ということがある
+    (コンテナがまだポートを開ける前の状態)。ここでraise_for_status()を確認せずに
+    「応答が来た=起きた」と判定すると、まだ起動中なのに合成処理に進んでしまい、
+    そちらも502で失敗する。そのため200が返るまで、一定間隔でリトライする。
     """
-    httpx.get(f"{VOICEVOX_URL}/version", timeout=timeout)
+    last_error: Exception | None = None
+    for attempt in range(retries):
+        try:
+            response = httpx.get(f"{VOICEVOX_URL}/version", timeout=timeout)
+            response.raise_for_status()
+            return
+        except Exception as e:
+            last_error = e
+            if attempt < retries - 1:
+                time.sleep(interval)
+    raise last_error
 
 
 def list_speakers() -> list[dict]:
@@ -38,10 +53,15 @@ def list_speakers() -> list[dict]:
 
     戻り値の例:
         [{"name": "四国めたん", "styles": [{"id": 2, "name": "ノーマル"}, ...]}, ...]
+
+    先にwake_up()でVOICEVOXが完全に起きているのを確認してから問い合わせる
+    (起動途中は応答が502になり、それをそのまま.json()すると分かりにくいエラーになるため)。
     """
+    wake_up()
     # 本番ではVOICEVOXが別サービス(無料枠)で動いており、休止状態からの起動待ちだけで
     # 50秒以上かかることがあるため、短いタイムアウトだと必ず失敗する。長めに取っておく。
     response = httpx.get(f"{VOICEVOX_URL}/speakers", timeout=90)
+    response.raise_for_status()
     speakers = response.json()
     return [
         {
