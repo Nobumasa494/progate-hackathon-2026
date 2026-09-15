@@ -43,9 +43,18 @@
     <div class="label">実際に食べたカロリー</div>
     <input class="input" id="actual-cal" type="number" style="max-width:160px;">
 
-    <div class="label" style="margin-top:16px;">今日、DJたちに教えたいことある?</div>
-    <textarea id="diary-note" class="form-control" rows="2" placeholder="面白かったこと、愚痴りたいこと、なんでも(必須)"></textarea>
-    <div id="diary-error" class="error" style="display:none;margin-top:6px;">今日、DJたちに教えたいことを入力してください。</div>
+    <div class="mb-2" style="margin-top:16px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:700;color:var(--ink-dim);">
+        <input type="checkbox" id="want-radio">
+        この記録から、今日のラジオも作る
+      </label>
+    </div>
+
+    <div id="diary-note-area" style="display:none;">
+      <div class="label">今日、DJたちに教えたいことある?</div>
+      <textarea id="diary-note" class="form-control" rows="2" placeholder="面白かったこと、愚痴りたいこと、なんでも(必須)"></textarea>
+      <div id="diary-error" class="error" style="display:none;margin-top:6px;">今日、DJたちに教えたいことを入力してください。</div>
+    </div>
 
     <br>
     <button class="btn" id="record-btn" style="width:100%;">記録する</button>
@@ -123,14 +132,22 @@ choiceKept.addEventListener("click", () => {
   if (suggestion) actualCal.value = suggestion.original_calories;
 });
 
+const wantRadioCheckbox = document.getElementById("want-radio");
+const diaryNoteArea = document.getElementById("diary-note-area");
 const diaryNoteEl = document.getElementById("diary-note");
 const diaryErrorEl = document.getElementById("diary-error");
+
+wantRadioCheckbox.addEventListener("change", () => {
+  diaryNoteArea.style.display = wantRadioCheckbox.checked ? "block" : "none";
+  diaryErrorEl.style.display = "none";
+});
 
 document.getElementById("record-btn").addEventListener("click", async () => {
   if (!suggestion) return;
 
+  const wantRadio = wantRadioCheckbox.checked;
   const diaryNote = diaryNoteEl.value.trim();
-  if (!diaryNote) {
+  if (wantRadio && !diaryNote) {
     diaryErrorEl.style.display = "block";
     diaryNoteEl.focus();
     return;
@@ -145,6 +162,7 @@ document.getElementById("record-btn").addEventListener("click", async () => {
     replacement_calories: suggestion.replacement_calories,
     did_replace: didReplace,
     actual_calories: Number(actualCal.value),
+    want_radio: wantRadio,
     diary_note: diaryNote,
   };
   const res = await fetch("/meal_logs", {
@@ -155,12 +173,17 @@ document.getElementById("record-btn").addEventListener("click", async () => {
   const confirmEl = document.getElementById("confirm");
   if (res.ok) {
     diaryNoteEl.value = "";
+    wantRadioCheckbox.checked = false;
+    diaryNoteArea.style.display = "none";
     const summaryRes = await fetch("/meal_logs/weekly-summary");
     const summary = await summaryRes.json();
     const thisWeek = summary[0] ? summary[0].total_saved_kcal : 0;
-    confirmEl.textContent = `記録しました。今週の削減: ${thisWeek}kcal`;
+    confirmEl.textContent = wantRadio
+      ? `記録しました。今週の削減: ${thisWeek}kcal(ラジオも生成を開始しました)`
+      : `記録しました。今週の削減: ${thisWeek}kcal`;
   } else {
-    confirmEl.textContent = "記録に失敗しました。";
+    const err = await res.json().catch(() => ({}));
+    confirmEl.textContent = err.error || "記録に失敗しました。";
   }
   confirmEl.classList.add("show");
 });

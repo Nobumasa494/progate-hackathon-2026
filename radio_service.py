@@ -201,13 +201,16 @@ def reached_daily_limit(user_id: str) -> bool:
 def try_start_generating(user_id: str) -> bool:
     """このユーザーの生成を裏側の別スレッドで開始できるなら、開始する。
 
-    「今日の上限に達していないか」「すでに生成中でないか」の判定と、is_generatingの
-    印を立てる操作を_generating_lockで1つの塊にする。これにより、手動ボタンと
-    自動生成(食事ログ記録)がほぼ同時に来ても、両方すり抜けて二重生成されることはない。
+    食事ログ記録画面(/record)で「ラジオも作る」が選ばれた時に呼ばれる、
+    ラジオ生成の唯一の入り口(設計書8章参照)。
 
-    手動ボタン・自動生成のどちらの経路でも、実際の生成は常にこの関数の中の裏スレッドで
-    行われる。呼び出し元(Flaskのリクエストハンドラ)は、生成の完了を待たずにすぐ制御が
-    返ってくる(gunicornのスレッドを1〜2分間ふさがないようにするため。設計書8章参照)。
+    「今日の上限に達していないか」「すでに生成中でないか」の判定と、is_generatingの
+    印を立てる操作を_generating_lockで1つの塊にする。これにより、ほぼ同時に複数の
+    リクエストが来ても、両方すり抜けて二重生成されることはない。
+
+    実際の生成は常にこの関数の中の裏スレッドで行われる。呼び出し元(Flaskの
+    リクエストハンドラ)は、生成の完了を待たずにすぐ制御が返ってくる
+    (gunicornのスレッドを1〜2分間ふさがないようにするため)。
 
     戻り値: 開始できたらTrue。開始できなかった(上限到達 or すでに生成中)場合はFalse。
     """
@@ -229,17 +232,6 @@ def try_start_generating(user_id: str) -> bool:
 
     threading.Thread(target=_run, daemon=True).start()
     return True
-
-
-def maybe_generate_in_background(user_id: str) -> None:
-    """今日まだ生成していなければ、裏側で生成を開始する。
-
-    事前生成の仕組み(設計書8章): 食事ログ記録をきっかけに、
-    ユーザーを待たせずに裏で生成しておき、次にアプリを開いたときには出来上がっている状態にする。
-    1日にMAX_EPISODES_PER_DAY回までは自動生成する(それ以上は手動ボタンでのみ生成可能)。
-    開始できるかどうかはtry_start_generating側の判定に任せ、ここでは結果を気にしない。
-    """
-    try_start_generating(user_id)
 
 
 def _generate_todays_episode(user_id: str) -> dict:
