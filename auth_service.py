@@ -6,7 +6,24 @@ Supabase Auth(メール/パスワード)を、サーバー側(Flaskのセッシ�
 
 from __future__ import annotations
 
+import os
+
+from supabase import create_client
+
 from goal_repository import get_client
+
+
+def _fresh_client():
+    """sign_up/sign_in専用の、使い捨てのSupabaseクライアントを作る。
+
+    client.auth.sign_up()/sign_in_with_password()は、そのクライアントの内部状態に
+    「今ログイン中のユーザー」の認証情報を書き込む。goal_repository.get_client()が
+    返す共有クライアント(複数箇所・複数リクエストで使い回されるもの)でこれを行うと、
+    誰かがログインした瞬間、共有クライアントの以降の全操作がそのユーザーの権限で
+    実行されてしまう(複数人が同時に使うと、他人の操作に影響しうる深刻な問題になる)。
+    そのためここだけは、使い終わったら捨てる専用のクライアントを使う。
+    """
+    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 
 
 def sign_up(email: str, password: str, favorite_things: str = ""):
@@ -15,7 +32,7 @@ def sign_up(email: str, password: str, favorite_things: str = ""):
     favorite_thingsは深夜ラジオ機能(実験中)で使う「好きなこと」のメモ。
     user_metadataとして保存され、後からuser.user_metadata["favorite_things"]で読める。
     """
-    client = get_client()
+    client = _fresh_client()
     result = client.auth.sign_up({
         "email": email,
         "password": password,
@@ -30,7 +47,7 @@ def sign_in(email: str, password: str):
     メールアドレス・パスワードが違う場合は例外(AuthApiError)が飛ぶので、
     呼び出し側でtry/exceptして扱う。
     """
-    client = get_client()
+    client = _fresh_client()
     result = client.auth.sign_in_with_password({"email": email, "password": password})
     return result.user
 
