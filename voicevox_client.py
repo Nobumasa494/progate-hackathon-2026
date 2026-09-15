@@ -22,7 +22,7 @@ DEFAULT_SPEAKER_B = 2  # 四国めたん(ノーマル)
 VOICEVOX_URL = os.environ.get("VOICEVOX_URL", "http://localhost:50021")
 
 
-def wake_up(timeout: int = 8, retries: int = 8, interval: int = 4) -> None:
+def wake_up(timeout: int = 10, retries: int = 15, interval: int = 5) -> None:
     """VOICEVOXが休止状態から完全に起きるまで待つ、軽いリクエスト。
 
     本番ではVOICEVOXが別サービス(無料枠)で動いており、休止状態からの起動待ちだけで
@@ -35,14 +35,14 @@ def wake_up(timeout: int = 8, retries: int = 8, interval: int = 4) -> None:
     「応答が来た=起きた」と判定すると、まだ起動中なのに合成処理に進んでしまい、
     そちらも502で失敗する。そのため200が返るまで、一定間隔でリトライする。
 
-    1回あたりのtimeoutは短め(8秒)にしている。/versionは起きてさえいれば一瞬で
-    返る軽いリクエストで、起動中の502も遅延なく返ってくるため、短いタイムアウトで
-    十分。その代わりretriesを8回に増やして、短いタイムアウト×複数回で50秒以上の
-    起動待ちをカバーする(最悪ケースでも8×8+7×4=92秒程度)。この関数は
-    list_speakers()など、リクエストを受けたFlaskのスレッドの中で同期的に
-    呼ばれる場合があるため、timeoutを大きくしたままリトライ回数を増やすと、
-    最悪ケースでそのスレッドを長時間(timeout×retries)塞いでしまう。短い
-    タイムアウトにしておくことで、その最悪時間も短く抑えている。
+    デフォルトは、リクエストを受けたFlaskのスレッドをブロックしない
+    synthesize_script()(ラジオ生成、裏スレッドで実行)向けに、余裕を持たせた値にしている
+    (最悪ケースで15×10+14×5=220秒。Renderの「50秒以上」という説明には上限が
+    書かれていないため、多少余裕を持たせておきたい)。
+
+    一方list_speakers()のように、リクエストを受けたFlaskのスレッドの中で同期的に
+    呼ばれる場合は、待ちすぎるとそのスレッドを長時間塞いでしまうため、呼び出し側で
+    timeout/retriesを短く指定すること。
     """
     last_error: Exception | None = None
     for attempt in range(retries):
@@ -65,8 +65,15 @@ def list_speakers() -> list[dict]:
 
     先にwake_up()でVOICEVOXが完全に起きているのを確認してから問い合わせる
     (起動途中は応答が502になり、それをそのまま.json()すると分かりにくいエラーになるため)。
+
+    ここはリクエストを受けたFlaskのスレッドの中で同期的に呼ばれるため、wake_up()の
+    デフォルト(裏スレッド向けの余裕がある値)は使わず、待ち時間を短め(最悪でも
+    約92秒)に指定している。この画面ではVOICEVOXが起動待ちで長くかかった場合、
+    エラーメッセージを出して他の項目だけ表示する作りになっているため(profile.html参照)、
+    ここで待ちすぎて画面全体を長時間ブロックするより、短めに諦めてエラー表示に
+    切り替える方が体験として良いと判断した。
     """
-    wake_up()
+    wake_up(timeout=8, retries=8, interval=4)
     # 本番ではVOICEVOXが別サービス(無料枠)で動いており、休止状態からの起動待ちだけで
     # 50秒以上かかることがあるため、短いタイムアウトだと必ず失敗する。長めに取っておく。
     response = httpx.get(f"{VOICEVOX_URL}/speakers", timeout=90)
