@@ -70,25 +70,43 @@ function fillVoiceOptions(select, speakers, selectedId) {
   }
 }
 
+let profileForVoices = null;
+
 async function load() {
   const profileRes = await fetch("/profile/data");
   const profile = await profileRes.json();
   favoriteThingsInput.value = profile.favorite_things || "";
   interestsInput.value = profile.interests || "";
 
-  // VOICEVOXが起動待ちで長くかかったり、通信が途中で切れたりすることがあるため、
-  // ここが失敗してもプロフィールの他の項目(上のfetch)は表示できるように分けている。
+  // DJキャラクター一覧はVOICEVOXの起動待ちで時間がかかることがあるため、
+  // ここでは待たずにポーリングで確認する(pollVoices参照)。
+  profileForVoices = profile;
+  pollVoices();
+}
+
+// VOICEVOXの起動待ちで時間がかかることがあるため、一覧の取得は裏側(/radio/voices)に
+// 任せて、ここでは定期的に「もう届いた?」と確認するだけにする(radio.htmlのpollStatusと
+// 同じ考え方)。読み込み中・失敗時も画面の他の項目はブロックしない。
+async function pollVoices() {
   try {
-    const voicesRes = await fetch("/radio/voices");
-    if (voicesRes.ok) {
-      const speakers = await voicesRes.json();
-      fillVoiceOptions(voiceASelect, speakers, profile.voice_a_id);
-      fillVoiceOptions(voiceBSelect, speakers, profile.voice_b_id);
-    } else {
+    const res = await fetch("/radio/voices");
+    const status = await res.json();
+
+    if (status.status === "ready") {
+      voicesErrorEl.style.display = "none";
+      fillVoiceOptions(voiceASelect, status.speakers, profileForVoices.voice_a_id);
+      fillVoiceOptions(voiceBSelect, status.speakers, profileForVoices.voice_b_id);
+      return; // 取得できたので、ポーリングはここで終了
+    }
+
+    if (status.status === "error") {
       voicesErrorEl.style.display = "block";
     }
+    // "loading"や"error"の場合は、しばらくしてまた確認する
+    setTimeout(pollVoices, 5000);
   } catch (e) {
     voicesErrorEl.style.display = "block";
+    setTimeout(pollVoices, 5000);
   }
 }
 

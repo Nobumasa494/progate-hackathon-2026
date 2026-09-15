@@ -147,7 +147,7 @@ def update_profile_data():
 @app.route("/radio/voices", methods=["GET"])
 @require_login_api
 def radio_voices():
-    return jsonify(voicevox_client.list_speakers())
+    return jsonify(radio_service.get_voices_status())
 
 
 # ---------------------------------------------------------------------------

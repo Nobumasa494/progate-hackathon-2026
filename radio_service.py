@@ -37,6 +37,14 @@ _generating_user_ids: set[str] = set()
 # 両方すり抜けて二重生成される可能性がある。
 _generating_lock = threading.Lock()
 
+# DJキャラクター一覧(VOICEVOXの話者一覧)のキャッシュ。VOICEVOXは無料枠だと休止から
+# 起きるまで時間がかかるため、プロフィール画面を開くたびに毎回待たせるのではなく、
+# 一度取得できたらキャッシュして使い回す(サーバー再起動まで変わらない前提)。
+_speakers_cache: list[dict] | None = None
+_speakers_fetching = False
+_speakers_error: str | None = None
+_speakers_lock = threading.Lock()
+
 
 def is_generating(user_id: str) -> bool:
     """今、このユーザーの分を裏で生成中かどうか。"""
@@ -232,6 +240,51 @@ def try_start_generating(user_id: str) -> bool:
 
     threading.Thread(target=_run, daemon=True).start()
     return True
+
+
+def get_voices_status() -> dict:
+    """DJキャラクター一覧(VOICEVOXの話者一覧)の取得状況を返す。
+
+    プロフィール画面(/radio/voices)から、定期的なポーリングで呼ばれる想定。
+    VOICEVOXが無料枠の休止から起きるまで時間がかかることがあり、リクエストを
+    受けたFlaskのスレッドの中で同期的に待つと、そのスレッドを長時間(gunicornの
+    --timeoutに近い時間)塞いでしまう。そのため、ラジオ生成(try_start_generating)と
+    同じ「裏スレッドで取得 + ポーリングで確認」の形にしている。
+
+    一度取得できればキャッシュするので、2回目以降の呼び出しはすぐ"ready"を返す。
+
+    戻り値:
+        {"status": "ready", "speakers": [...]} 取得済み
+        {"status": "loading"} 裏で取得中(呼び出し側はしばらくしてまた呼ぶ)
+        {"status": "error", "error": "..."} 直近の取得が失敗した(次回また自動で再試行する)
+    """
+    global _speakers_fetching, _speakers_error
+    with _speakers_lock:
+        if _speakers_cache is not None:
+            return {"status": "ready", "speakers": _speakers_cache}
+        if _speakers_error is not None:
+            error = _speakers_error
+            _speakers_error = None  # 次のポーリングで再試行できるようにする
+            return {"status": "error", "error": error}
+        if not _speakers_fetching:
+            _speakers_fetching = True
+            threading.Thread(target=_fetch_speakers, daemon=True).start()
+    return {"status": "loading"}
+
+
+def _fetch_speakers() -> None:
+    global _speakers_cache, _speakers_error, _speakers_fetching
+    try:
+        speakers = voicevox_client.list_speakers()
+        with _speakers_lock:
+            _speakers_cache = speakers
+    except Exception as e:
+        print(f"[radio] 話者一覧の取得に失敗しました: {e}")
+        with _speakers_lock:
+            _speakers_error = str(e)
+    finally:
+        with _speakers_lock:
+            _speakers_fetching = False
 
 
 def _generate_todays_episode(user_id: str) -> dict:
