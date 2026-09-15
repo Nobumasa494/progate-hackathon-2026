@@ -35,6 +35,7 @@
 
     <button class="btn" id="save-btn">保存する</button>
     <p id="saved" class="sub" style="display:none;margin-top:12px;">保存しました。</p>
+    <p id="save-error" class="error" style="display:none;margin-top:12px;">保存に失敗しました。</p>
     <p id="voices-error" class="error" style="display:none;margin-top:12px;">
       キャラクター一覧の取得に失敗しました。VOICEVOXエンジンが起動しているか確認してください。
     </p>
@@ -55,7 +56,9 @@ const interestsInput = document.getElementById("interests");
 const voiceASelect = document.getElementById("voice-a");
 const voiceBSelect = document.getElementById("voice-b");
 const savedEl = document.getElementById("saved");
+const saveErrorEl = document.getElementById("save-error");
 const voicesErrorEl = document.getElementById("voices-error");
+const saveBtn = document.getElementById("save-btn");
 
 function fillVoiceOptions(select, speakers, selectedId) {
   select.innerHTML = "";
@@ -70,41 +73,69 @@ function fillVoiceOptions(select, speakers, selectedId) {
   }
 }
 
+let profileForVoices = null;
+
 async function load() {
   const profileRes = await fetch("/profile/data");
   const profile = await profileRes.json();
   favoriteThingsInput.value = profile.favorite_things || "";
   interestsInput.value = profile.interests || "";
 
-  // VOICEVOXが起動待ちで長くかかったり、通信が途中で切れたりすることがあるため、
-  // ここが失敗してもプロフィールの他の項目(上のfetch)は表示できるように分けている。
+  // DJキャラクター一覧はVOICEVOXの起動待ちで時間がかかることがあるため、
+  // ここでは待たずにポーリングで確認する(pollVoices参照)。
+  profileForVoices = profile;
+  pollVoices();
+}
+
+// VOICEVOXの起動待ちで時間がかかることがあるため、一覧の取得は裏側(/radio/voices)に
+// 任せて、ここでは定期的に「もう届いた?」と確認するだけにする(radio.htmlのpollStatusと
+// 同じ考え方)。読み込み中・失敗時も画面の他の項目はブロックしない。
+async function pollVoices() {
   try {
-    const voicesRes = await fetch("/radio/voices");
-    if (voicesRes.ok) {
-      const speakers = await voicesRes.json();
-      fillVoiceOptions(voiceASelect, speakers, profile.voice_a_id);
-      fillVoiceOptions(voiceBSelect, speakers, profile.voice_b_id);
-    } else {
+    const res = await fetch("/radio/voices");
+    const status = await res.json();
+
+    if (status.status === "ready") {
+      voicesErrorEl.style.display = "none";
+      fillVoiceOptions(voiceASelect, status.speakers, profileForVoices.voice_a_id);
+      fillVoiceOptions(voiceBSelect, status.speakers, profileForVoices.voice_b_id);
+      return; // 取得できたので、ポーリングはここで終了
+    }
+
+    if (status.status === "error") {
       voicesErrorEl.style.display = "block";
     }
+    // "loading"や"error"の場合は、しばらくしてまた確認する
+    setTimeout(pollVoices, 5000);
   } catch (e) {
     voicesErrorEl.style.display = "block";
+    setTimeout(pollVoices, 5000);
   }
 }
 
-document.getElementById("save-btn").addEventListener("click", async () => {
+saveBtn.addEventListener("click", async () => {
   savedEl.style.display = "none";
-  await fetch("/profile/data", {
+  saveErrorEl.style.display = "none";
+
+  const body = {
+    favorite_things: favoriteThingsInput.value.trim(),
+    interests: interestsInput.value.trim(),
+  };
+  // 話者一覧がまだ届いておらずプルダウンが空の場合は、voice_a_id/voice_b_idを
+  // 送らない(サーバー側は送られなかった項目を今の値のまま変更しない)。
+  if (voiceASelect.value) body.voice_a_id = voiceASelect.value;
+  if (voiceBSelect.value) body.voice_b_id = voiceBSelect.value;
+
+  const res = await fetch("/profile/data", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      favorite_things: favoriteThingsInput.value.trim(),
-      interests: interestsInput.value.trim(),
-      voice_a_id: voiceASelect.value,
-      voice_b_id: voiceBSelect.value,
-    }),
+    body: JSON.stringify(body),
   });
-  savedEl.style.display = "block";
+  if (res.ok) {
+    savedEl.style.display = "block";
+  } else {
+    saveErrorEl.style.display = "block";
+  }
 });
 
 load();
