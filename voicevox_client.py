@@ -85,7 +85,7 @@ def list_speakers() -> list[dict]:
     ]
 
 
-def synthesize_line(text: str, speaker: int, retries: int = 2) -> bytes:
+def synthesize_line(text: str, speaker: int, retries: int = 4) -> bytes:
     """1セリフ分の音声(wavバイト列)を作る。
 
     タイムアウトは長めの120秒にしている。本番ではVOICEVOXが別サービス(無料枠)で
@@ -93,10 +93,20 @@ def synthesize_line(text: str, speaker: int, retries: int = 2) -> bytes:
     (Renderの無料インスタンスの仕様)、60秒程度だと起動待ち+実際の合成時間で
     タイムアウトしてしまう実例があった。
 
-    起きた直後など、一時的に不安定な応答(空の応答など)を返すことがあったため、
+    起きた直後など、一時的に不安定な応答(空の応答や502)を返すことがあったため、
     失敗したら少し待ってから自動で再試行する(最大retries回)。raise_for_status()で
     エラー時にステータスコード付きの分かりやすい例外にしている(空の応答を
     そのままJSONとして読もうとして分かりにくいエラーになるのを防ぐため)。
+
+    retriesは、以前2回(最大約9秒粘る)にしていたが、実際の本番で
+    「synthesize_script側のwake_up()は/versionに成功しているのに、直後の
+    /audio_queryだけがまだ502になる」という例が確認された。VOICEVOXが完全に
+    安定するまでには/versionが通ってからも少し時間がかかることがあるとみられるため、
+    4回(最大約20秒)に増やした。もっと粘る(6回・約30秒)ことも検討したが、
+    VOICEVOXが一時的な不調ではなく完全にダウンしている場合、粘る時間が長いほど
+    生成失敗までの時間も伸び、その間裏スレッドがメモリを使い続けてしまう
+    (無料枠は512MBしかなく、メモリ超過による再起動が実際に繰り返し起きているため)。
+    502の再発防止と、ダウン時の被害を広げすぎないことのバランスを取った値。
     """
     last_error: Exception | None = None
     for attempt in range(retries + 1):
@@ -118,7 +128,7 @@ def synthesize_line(text: str, speaker: int, retries: int = 2) -> bytes:
         except Exception as e:
             last_error = e
             if attempt < retries:
-                time.sleep(3)
+                time.sleep(5)
     raise last_error
 
 
