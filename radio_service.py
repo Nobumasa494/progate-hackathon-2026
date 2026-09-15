@@ -171,7 +171,7 @@ def _maybe_generate_reflection(user_id: str, episode_count: int) -> None:
     radio_memory_repository.save_memory(user_id, content=reflection, importance=9, kind="reflection")
 
 
-MAX_EPISODES_PER_DAY = 5
+MAX_EPISODES_PER_DAY = 20
 
 # 「好きなこと」「興味があること」は毎回プロンプトに渡すと、AIにとって一番使いやすい
 # 話題になってしまい、結果的に同じ話ばかりになる。そのため、コード側で頻度そのものを
