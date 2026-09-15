@@ -67,16 +67,18 @@ def list_speakers() -> list[dict]:
     (起動途中は応答が502になり、それをそのまま.json()すると分かりにくいエラーになるため)。
 
     ここはリクエストを受けたFlaskのスレッドの中で同期的に呼ばれるため、wake_up()の
-    デフォルト(裏スレッド向けの余裕がある値)は使わず、待ち時間を短め(最悪でも
-    約92秒)に指定している。この画面ではVOICEVOXが起動待ちで長くかかった場合、
-    エラーメッセージを出して他の項目だけ表示する作りになっているため(profile.html参照)、
-    ここで待ちすぎて画面全体を長時間ブロックするより、短めに諦めてエラー表示に
-    切り替える方が体験として良いと判断した。
+    デフォルト(裏スレッド向けの余裕がある値、最悪約220秒)は使わず、gunicornの
+    --timeout(300秒)に収まる範囲で少し短くした値を指定している(最悪でも約175秒)。
+
+    実際の本番ログで、完全に休止した状態からの起動に90秒以上かかり、以前の短い予算
+    (最悪92秒)では起動を待ちきれずに失敗する例が確認された。Renderの「50秒以上」という
+    説明はあくまで目安で、実際にはそれを超えることがあるため、ここは余裕を持たせる。
+
+    wake_up()で起動を確認できた後の/speakersへの問い合わせは、VOICEVOXが応答できる
+    状態であることが分かっているので、短め(60秒)で十分。
     """
-    wake_up(timeout=8, retries=8, interval=4)
-    # 本番ではVOICEVOXが別サービス(無料枠)で動いており、休止状態からの起動待ちだけで
-    # 50秒以上かかることがあるため、短いタイムアウトだと必ず失敗する。長めに取っておく。
-    response = httpx.get(f"{VOICEVOX_URL}/speakers", timeout=90)
+    wake_up(timeout=10, retries=12, interval=5)
+    response = httpx.get(f"{VOICEVOX_URL}/speakers", timeout=60)
     response.raise_for_status()
     speakers = response.json()
     return [
