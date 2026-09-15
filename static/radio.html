@@ -115,10 +115,8 @@
 
       <audio id="player" controls class="w-100 mb-3"></audio>
 
-      <button class="btn btn-radio w-100 fw-bold" id="generate-btn">今日のラジオを作る</button>
-      <p id="generating" class="text-secondary small mt-2 mb-0" style="display:none;">生成中です。1〜2分ほどかかります...</p>
-      <p id="limit-reached" class="text-secondary small mt-2 mb-0" style="display:none;">今日の生成回数の上限に達しました。</p>
-      <p class="text-secondary small mt-2 mb-0">※食事ログ画面で「今日、DJたちに教えたいこと」を記録すると、上限に達していなければ自動で生成が始まります(1日2回まで)</p>
+      <button class="btn btn-radio w-100 fw-bold" id="listen-btn" style="display:none;">今日のラジオを聴く</button>
+      <p id="cta-message" class="text-secondary small mt-2 mb-0"></p>
     </div>
   </div>
 
@@ -145,16 +143,14 @@
     </div>
   </div>
 
-  <p id="empty" class="sub" style="display:none;">まだエピソードがありません。「今日のラジオを作る」を押してください。</p>
 </div>
 
 <script src="nav.js"></script>
 <script>
 renderNav("radio");
 
-const generateBtn = document.getElementById("generate-btn");
-const generatingEl = document.getElementById("generating");
-const limitReachedEl = document.getElementById("limit-reached");
+const listenBtn = document.getElementById("listen-btn");
+const ctaMessage = document.getElementById("cta-message");
 const playerArea = document.getElementById("player-area");
 const player = document.getElementById("player");
 const downloadLink = document.getElementById("download-link");
@@ -166,7 +162,6 @@ const sharedInfo = document.getElementById("shared-info");
 const sharedSummary = document.getElementById("shared-summary");
 let currentEpisodeId = null;
 const scriptText = document.getElementById("script-text");
-const emptyEl = document.getElementById("empty");
 const onairEl = document.getElementById("onair");
 const onairLabel = document.getElementById("onair-label");
 const waveEl = document.getElementById("wave");
@@ -191,6 +186,8 @@ player.addEventListener("ended", () => {
   waveEl.classList.remove("playing");
   talkBubblesEl.classList.remove("active");
   setOnAir(false, "STANDBY");
+  hasPlayedOnce = true;
+  renderCta();
 });
 
 async function loadLatest() {
@@ -198,10 +195,8 @@ async function loadLatest() {
   const data = await res.json();
   if (!data.episode) {
     playerArea.style.display = "none";
-    emptyEl.style.display = "block";
     return;
   }
-  emptyEl.style.display = "none";
   playerArea.style.display = "block";
   player.src = data.episode.audio_url;
   downloadLink.href = data.episode.audio_url;
@@ -232,47 +227,64 @@ shareBtn.addEventListener("click", async () => {
   await loadLatest();
 });
 
-// 今日もう出来ているかどうかで、ボタンの役割を切り替える。
-// 無ければ「作る」(押すと生成)、あれば「聴く」(押すとプレイヤーまでスクロールするだけ)。
+// このページには「作る」ボタンはもう無い。ラジオを作る入り口は食事ログ画面(/record)だけ。
+// ここは「今、どういう状態か」を表示し、できていれば聴けるようにするだけの画面。
 let hasEpisodeToday = false;
+let hasPlayedOnce = false;
+let currentStatus = null;
 
-generateBtn.addEventListener("click", async () => {
-  if (hasEpisodeToday) {
-    playerArea.scrollIntoView({ behavior: "smooth", block: "start" });
-    player.play();
+function renderCta() {
+  if (!currentStatus) return;
+
+  if (currentStatus.generating) {
+    listenBtn.style.display = "none";
+    ctaMessage.textContent = "生成中です。1〜2分ほどかかります...";
     return;
   }
-  // /radio/generateは生成の完了を待たず、開始できたかどうかだけをすぐ返す
-  // (裏スレッドで生成するため、gunicornのスレッドを1〜2分間ふさがないようにするため)。
-  // 生成中の表示・完了時の読み込みは、既存のpollStatus()のポーリングにまかせる。
-  generateBtn.disabled = true;
-  const res = await fetch("/radio/generate", { method: "POST" });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    alert(data.error || "生成を開始できませんでした。しばらくしてからもう一度試してください。");
+
+  if (!hasEpisodeToday) {
+    listenBtn.style.display = "none";
+    if (currentStatus.reached_daily_limit) {
+      ctaMessage.textContent = "今日の生成回数の上限に達しました。";
+    } else {
+      ctaMessage.innerHTML = 'まだ何も作っていません。<a href="/record">食事ログ</a>を記録してください。';
+    }
+    return;
   }
-  await pollStatus();
+
+  // 今日の分はもう出来ている
+  listenBtn.style.display = "block";
+  listenBtn.textContent = hasPlayedOnce ? "もう一度聴く" : "今日のラジオを聴く";
+  ctaMessage.innerHTML = hasPlayedOnce
+    ? '新しいラジオを聞きたい場合は、<a href="/record">新しく記録して</a>ください。'
+    : "";
+}
+
+listenBtn.addEventListener("click", () => {
+  playerArea.scrollIntoView({ behavior: "smooth", block: "start" });
+  player.currentTime = 0;
+  player.play();
 });
 
-// 自動生成(食事ログ記録がきっかけ)が裏で走っているかどうかを、定期的に確認する。
-// 生成中は手動ボタンを無効化し、生成が終わった瞬間に最新のエピソードを読み込み直す。
+// 食事ログ記録がきっかけで裏で生成が走っているかどうかを、定期的に確認する。
+// 生成が終わった瞬間に最新のエピソードを読み込み直す。
 let wasGenerating = false;
 async function pollStatus() {
   const res = await fetch("/radio/status");
   const status = await res.json();
+  currentStatus = status;
 
   hasEpisodeToday = status.has_episode_today;
-  generateBtn.textContent = hasEpisodeToday ? "今日のラジオを聴く" : "今日のラジオを作る";
-  generateBtn.disabled = status.generating || (!hasEpisodeToday && status.reached_daily_limit);
-  generatingEl.style.display = status.generating ? "block" : "none";
-  limitReachedEl.style.display = (!status.generating && !hasEpisodeToday && status.reached_daily_limit) ? "block" : "none";
   if (status.generating) setOnAir(true, "REC");
   else if (!player.paused === false && player.currentTime === 0) setOnAir(false, "STANDBY");
 
   if (wasGenerating && !status.generating) {
+    hasPlayedOnce = false; // 新しい回ができたので、また「聴く」からやり直し
     await loadLatest();
   }
   wasGenerating = status.generating;
+
+  renderCta();
 }
 
 loadLatest();

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import os
+import time
 import wave
 from concurrent.futures import ThreadPoolExecutor
 
@@ -51,26 +52,41 @@ def list_speakers() -> list[dict]:
     ]
 
 
-def synthesize_line(text: str, speaker: int) -> bytes:
+def synthesize_line(text: str, speaker: int, retries: int = 2) -> bytes:
     """1セリフ分の音声(wavバイト列)を作る。
 
     タイムアウトは長めの120秒にしている。本番ではVOICEVOXが別サービス(無料枠)で
     動いており、休止状態からの起動待ちだけで50秒以上かかることがあるため
     (Renderの無料インスタンスの仕様)、60秒程度だと起動待ち+実際の合成時間で
     タイムアウトしてしまう実例があった。
+
+    起きた直後など、一時的に不安定な応答(空の応答など)を返すことがあったため、
+    失敗したら少し待ってから自動で再試行する(最大retries回)。raise_for_status()で
+    エラー時にステータスコード付きの分かりやすい例外にしている(空の応答を
+    そのままJSONとして読もうとして分かりにくいエラーになるのを防ぐため)。
     """
-    query = httpx.post(
-        f"{VOICEVOX_URL}/audio_query",
-        params={"text": text, "speaker": speaker},
-        timeout=120,
-    ).json()
-    audio = httpx.post(
-        f"{VOICEVOX_URL}/synthesis",
-        params={"speaker": speaker},
-        json=query,
-        timeout=120,
-    )
-    return audio.content
+    last_error: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            query_response = httpx.post(
+                f"{VOICEVOX_URL}/audio_query",
+                params={"text": text, "speaker": speaker},
+                timeout=120,
+            )
+            query_response.raise_for_status()
+            audio = httpx.post(
+                f"{VOICEVOX_URL}/synthesis",
+                params={"speaker": speaker},
+                json=query_response.json(),
+                timeout=120,
+            )
+            audio.raise_for_status()
+            return audio.content
+        except Exception as e:
+            last_error = e
+            if attempt < retries:
+                time.sleep(3)
+    raise last_error
 
 
 def synthesize_script(

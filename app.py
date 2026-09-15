@@ -250,9 +250,12 @@ def create_meal_log():
     if missing:
         return jsonify({"error": f"不足しているフィールド: {missing}"}), 400
 
+    # ラジオも作る場合だけ、「今日、DJたちに教えたいこと」が必須になる。
+    # ラジオ機能自体、この食事ログ画面が唯一の入り口(/radioには生成ボタンを置かない)。
+    want_radio = bool(data.get("want_radio", False))
     diary_note = data.get("diary_note", "").strip()
-    if not diary_note:
-        return jsonify({"error": "今日、DJたちに教えたいことを入力してください"}), 400
+    if want_radio and not diary_note:
+        return jsonify({"error": "ラジオも作る場合は、今日、DJたちに教えたいことを入力してください"}), 400
 
     user_id = session["user_id"]
 
@@ -270,10 +273,9 @@ def create_meal_log():
         actual_calories=int(data["actual_calories"]),
         goal_id=goal_id,
     )
-    # 食事ログを書くタイミングで一緒に記録してもらうことで、書き忘れを防ぐ
-    # (以前はラジオ画面に別の入力欄があったが、そちらは廃止した)
-    auth_service.update_pending_diary_note(user_id, diary_note)
-    radio_service.maybe_generate_in_background(user_id)
+    if want_radio:
+        auth_service.update_pending_diary_note(user_id, diary_note)
+        radio_service.try_start_generating(user_id)
     return jsonify(log), 201
 
 
@@ -427,21 +429,6 @@ def radio_status():
         "has_episode_today": radio_service.has_episode_today(user_id),
         "reached_daily_limit": radio_service.reached_daily_limit(user_id),
     })
-
-
-@app.route("/radio/generate", methods=["POST"])
-@require_login_api
-def radio_generate():
-    """手動生成ボタン。実際の生成は裏スレッドで行い、開始できたかどうかだけをすぐ返す。
-
-    完了を待たずに返すので、生成が終わったかどうかはブラウザ側の/radio/statusの
-    ポーリングで検知してもらう(自動生成と同じ経路)。
-    """
-    user_id = session["user_id"]
-    started = radio_service.try_start_generating(user_id)
-    if not started:
-        return jsonify({"error": f"すでに生成中か、1日に生成できる回数({radio_service.MAX_EPISODES_PER_DAY}回)に達しています"}), 429
-    return jsonify({"status": "ok"})
 
 
 @app.route("/radio/share", methods=["POST"])
