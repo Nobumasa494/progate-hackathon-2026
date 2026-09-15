@@ -134,13 +134,18 @@ def get_profile_data():
 @require_login_api
 def update_profile_data():
     data = request.get_json(silent=True) or {}
-    auth_service.update_profile(
-        session["user_id"],
-        favorite_things=data.get("favorite_things", ""),
-        interests=data.get("interests", ""),
-        voice_a_id=int(data["voice_a_id"]),
-        voice_b_id=int(data["voice_b_id"]),
-    )
+    fields = {
+        "favorite_things": data.get("favorite_things", ""),
+        "interests": data.get("interests", ""),
+    }
+    # voice_a_id/voice_b_idは、話者一覧(VOICEVOX)がまだ読み込めていない状態で
+    # 保存された場合は送られてこない。その場合は今の値を変更しない
+    # (update_profileは渡された項目だけ上書きする仕様のため)。
+    if data.get("voice_a_id"):
+        fields["voice_a_id"] = int(data["voice_a_id"])
+    if data.get("voice_b_id"):
+        fields["voice_b_id"] = int(data["voice_b_id"])
+    auth_service.update_profile(session["user_id"], **fields)
     return jsonify({"status": "ok"})
 
 
