@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -55,11 +56,28 @@ def _load_env() -> None:
 
 _load_env()
 
+_client: Client | None = None
+_client_lock = threading.Lock()
+
 
 def get_client(url: Optional[str] = None, key: Optional[str] = None) -> Client:
-    url = url or os.environ["SUPABASE_URL"]
-    key = key or os.environ["SUPABASE_KEY"]
-    return create_client(url, key)
+    """Supabaseクライアントを取得する。未指定時は環境変数から読む。
+
+    毎回create_client()し直すと、呼ぶたびに新しいHTTP接続プールが作られ、
+    使い終わってもすぐには解放されない。/radio/statusなど数秒おきにポーリングされる
+    エンドポイントで積み重なり、本番でメモリ超過による再起動が繰り返し起きる原因に
+    なっていたため、環境変数からのデフォルト呼び出し(url/key未指定)の場合は
+    モジュール内で1つだけ作って使い回す。_client_lockは、起動直後に複数スレッドが
+    ほぼ同時に呼んだ場合に、無駄なクライアントが2重に作られるのを防ぐため。
+    """
+    global _client
+    if url is None and key is None:
+        if _client is None:
+            with _client_lock:
+                if _client is None:
+                    _client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+        return _client
+    return create_client(url or os.environ["SUPABASE_URL"], key or os.environ["SUPABASE_KEY"])
 
 
 def fetch_latest_episode(user_id: str, client: Optional[Client] = None) -> Optional[dict]:
