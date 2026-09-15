@@ -22,7 +22,7 @@ DEFAULT_SPEAKER_B = 2  # 四国めたん(ノーマル)
 VOICEVOX_URL = os.environ.get("VOICEVOX_URL", "http://localhost:50021")
 
 
-def wake_up(timeout: int = 180, retries: int = 10, interval: int = 5) -> None:
+def wake_up(timeout: int = 8, retries: int = 8, interval: int = 4) -> None:
     """VOICEVOXが休止状態から完全に起きるまで待つ、軽いリクエスト。
 
     本番ではVOICEVOXが別サービス(無料枠)で動いており、休止状態からの起動待ちだけで
@@ -34,6 +34,15 @@ def wake_up(timeout: int = 180, retries: int = 10, interval: int = 5) -> None:
     (コンテナがまだポートを開ける前の状態)。ここでraise_for_status()を確認せずに
     「応答が来た=起きた」と判定すると、まだ起動中なのに合成処理に進んでしまい、
     そちらも502で失敗する。そのため200が返るまで、一定間隔でリトライする。
+
+    1回あたりのtimeoutは短め(8秒)にしている。/versionは起きてさえいれば一瞬で
+    返る軽いリクエストで、起動中の502も遅延なく返ってくるため、短いタイムアウトで
+    十分。その代わりretriesを8回に増やして、短いタイムアウト×複数回で50秒以上の
+    起動待ちをカバーする(最悪ケースでも8×8+7×4=92秒程度)。この関数は
+    list_speakers()など、リクエストを受けたFlaskのスレッドの中で同期的に
+    呼ばれる場合があるため、timeoutを大きくしたままリトライ回数を増やすと、
+    最悪ケースでそのスレッドを長時間(timeout×retries)塞いでしまう。短い
+    タイムアウトにしておくことで、その最悪時間も短く抑えている。
     """
     last_error: Exception | None = None
     for attempt in range(retries):
