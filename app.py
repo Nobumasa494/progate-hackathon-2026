@@ -125,6 +125,7 @@ def get_profile_data():
     return jsonify({
         "favorite_things": profile.get("favorite_things", ""),
         "interests": profile.get("interests", ""),
+        "allergens": auth_service.get_allergens(session["user_id"]),
         "voice_a_id": profile.get("voice_a_id", voicevox_client.DEFAULT_SPEAKER_A),
         "voice_b_id": profile.get("voice_b_id", voicevox_client.DEFAULT_SPEAKER_B),
     })
@@ -138,6 +139,8 @@ def update_profile_data():
         "favorite_things": data.get("favorite_things", ""),
         "interests": data.get("interests", ""),
     }
+    if data.get("allergens") is not None:
+        fields["allergens"] = [a for a in data["allergens"] if isinstance(a, str) and a.strip()][:20]
     # voice_a_id/voice_b_idは、話者一覧(VOICEVOX)がまだ読み込めていない状態で
     # 保存された場合は送られてこない。その場合は今の値を変更しない
     # (update_profileは渡された項目だけ上書きする仕様のため)。
@@ -211,7 +214,14 @@ def suggest():
     if goal and not goal.get("expired") and goal.get("target_daily_reduction_kcal"):
         target = goal["target_daily_reduction_kcal"]
 
-    result = recipe_service.suggest_replacement(dish_name, target_daily_reduction_kcal=target)
+    # プロフィールに設定されたアレルゲン(特定原材料)は提案に反映する
+    allergens = auth_service.get_allergens(user_id)
+
+    result = recipe_service.suggest_replacement(
+        dish_name,
+        target_daily_reduction_kcal=target,
+        allergens=allergens,
+    )
 
     # 機能2が後で使えるように、最新の提案として保存しておく
     latest_suggestions.save_latest_suggestion(user_id, {
