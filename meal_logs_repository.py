@@ -181,6 +181,23 @@ def fetch_total_saved(
     return sum(int(log["calorie_diff"] or 0) for log in logs)
 
 
+def delete_log(user_id: str, log_id: int, client: Optional[Client] = None) -> bool:
+    """自分の食事ログを1件削除する。削除できたらTrue、見つからなければFalse。
+
+    所有権チェック(.eq("user_id", user_id).eq("id", log_id))を必ず入れる。
+    RLSが無効のため、これを忘れると誰の記録でもIDが分かれば消せてしまう。
+    """
+    client = client or get_client()
+    resp = (
+        client.table("meal_logs")
+        .delete()
+        .eq("id", log_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return bool(resp.data)
+
+
 def _week_start(created_at: str) -> str:
     """created_at（ISO8601）からその週の月曜日の日付（YYYY-MM-DD）を返す。"""
     from datetime import datetime, timedelta
