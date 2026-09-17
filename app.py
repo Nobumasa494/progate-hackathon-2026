@@ -310,6 +310,16 @@ def meal_logs_weekly_summary():
     return jsonify(summary)
 
 
+@app.route("/meal_logs/<int:log_id>", methods=["DELETE"])
+@require_login_api
+def delete_meal_log(log_id: int):
+    user_id = session["user_id"]
+    deleted = meal_logs_repository.delete_log(user_id, log_id)
+    if not deleted:
+        return jsonify({"error": "指定された食事ログが見つかりません"}), 404
+    return jsonify({"status": "ok"})
+
+
 @app.route("/progress", methods=["GET"])
 @require_login_api
 def get_progress():
