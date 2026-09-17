@@ -91,3 +91,19 @@ def update_pending_diary_note(user_id: str, note: str) -> None:
     (radio_service.py参照)。
     """
     update_profile(user_id, pending_diary_note=note)
+
+
+def get_allergens(user_id: str) -> list[str]:
+    """アレルゲン(特定原材料)の一覧を取得する(未設定なら空リスト)。
+
+    例: ["えび", "小麦", "乳"]
+    """
+    value = get_profile(user_id).get("allergens", [])
+    if isinstance(value, str):
+        value = [a.strip() for a in value.split(",") if a.strip()]
+    return [a for a in value if isinstance(a, str)]
+
+
+def update_allergens(user_id: str, allergens: list[str]) -> None:
+    """アレルゲン(特定原材料)の一覧を保存する(空リスト=未設定)。"""
+    update_profile(user_id, allergens=allergens)

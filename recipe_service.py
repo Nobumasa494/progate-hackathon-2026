@@ -60,11 +60,15 @@ SYSTEM_PROMPT = """\
 def suggest_replacement(
     dish_name: str,
     target_daily_reduction_kcal: Optional[float] = None,
+    allergens: Optional[list[str]] = None,
 ) -> dict:
     """置き換えレシピを提案する。
 
     target_daily_reduction_kcal が指定されていれば（＝機能3で目標が設定されていれば）、
     それを踏まえた提案になるようAIへの指示文に反映する。
+
+    allergens に特定原材料（えび・カシューナッツ・かに・くるみ・小麦・そば・卵・乳・落花生）
+    のいずれかを含むと、その食材を使ったレシピをAIが提案しなくなる。
 
     安全のため、AIに伝える削減目標は MAX_SAFE_DAILY_REDUCTION_KCAL を上限に丸める。
     本来の目標が上限を超えていた場合は is_capped=True を結果に含め、
@@ -82,12 +86,20 @@ def suggest_replacement(
             "それを踏まえた提案にしてください。"
         )
 
+    allergen_instruction = ""
+    if allergens:
+        allergen_instruction = (
+            "\n以下の食材はアレルギーのため絶対に使用しないでください: "
+            + "、".join(allergens)
+            + "\nアレルゲンを含む調味料・加工食品も使わないでください。"
+        )
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         response_format={"type": "json_object"},
         temperature=1.2,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT + extra_instruction},
+            {"role": "system", "content": SYSTEM_PROMPT + extra_instruction + allergen_instruction},
             {"role": "user", "content": f"料理名: {dish_name}"},
         ],
     )

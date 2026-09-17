@@ -28,6 +28,9 @@
     <div class="label">興味があること</div>
     <input class="input" id="interests" type="text" placeholder="例: 宇宙、心理学" style="margin-bottom:14px;">
 
+    <div class="label">アレルギーがある食材 (レシピ提案時に使います)</div>
+    <div id="allergen-list" style="margin-bottom:14px;"></div>
+
     <div class="label">DJ Aのキャラクター</div>
     <select class="input" id="voice-a"></select>
 
@@ -61,6 +64,26 @@ const saveErrorEl = document.getElementById("save-error");
 const voicesErrorEl = document.getElementById("voices-error");
 const saveBtn = document.getElementById("save-btn");
 
+// 特定原材料8品目(表示名)
+const ALLERGENS = ["えび", "カシューナッツ", "かに", "くるみ", "小麦", "そば", "卵", "乳", "落花生"];
+const allergenList = document.getElementById("allergen-list");
+
+function renderAllergenCheckboxes(selected) {
+  allergenList.innerHTML = "";
+  for (const allergen of ALLERGENS) {
+    const label = document.createElement("label");
+    label.style.cssText = "display:inline-flex;align-items:center;gap:6px;margin-right:14px;margin-bottom:8px;font-size:14px;";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = allergen;
+    checkbox.id = "allergen-" + allergen;
+    if (selected.includes(allergen)) checkbox.checked = true;
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(allergen));
+    allergenList.appendChild(label);
+  }
+}
+
 function fillVoiceOptions(select, speakers, selectedId) {
   select.innerHTML = "";
   for (const speaker of speakers) {
@@ -81,6 +104,7 @@ async function load() {
   const profile = await profileRes.json();
   favoriteThingsInput.value = profile.favorite_things || "";
   interestsInput.value = profile.interests || "";
+  renderAllergenCheckboxes(profile.allergens || []);
 
   // DJキャラクター一覧はVOICEVOXの起動待ちで時間がかかることがあるため、
   // ここでは待たずにポーリングで確認する(pollVoices参照)。
@@ -121,6 +145,7 @@ saveBtn.addEventListener("click", async () => {
   const body = {
     favorite_things: favoriteThingsInput.value.trim(),
     interests: interestsInput.value.trim(),
+    allergens: Array.from(allergenList.querySelectorAll("input:checked")).map(c => c.value),
   };
   // 話者一覧がまだ届いておらずプルダウンが空の場合は、voice_a_id/voice_b_idを
   // 送らない(サーバー側は送られなかった項目を今の値のまま変更しない)。
