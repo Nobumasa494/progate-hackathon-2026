@@ -103,3 +103,19 @@ ul,ol{margin:0;padding-left:20px;font-size:14px;line-height:1.9;}
 }
 .sparkle{display:inline-block;animation:sparkle-pulse 1.8s ease-in-out infinite;}
 @keyframes sparkle-pulse{0%,100%{opacity:0.55;transform:scale(0.9);}50%{opacity:1;transform:scale(1.1);}}
+
+/* 画面が広い(PCなど)ときだけ、中身を少し広げて左右の余白の印象を和らげる。
+   スマホ幅(768px未満)にはこのブロックは一切適用されないため、見た目は変わらない。
+   ファイルの一番最後に置くことで、同じ強さの他のルール(.wrap・.navbarのmax-width指定)を
+   確実に上書きできるようにしている(CSSは同じ詳細度なら後に書かれた方が勝つため)。 */
+@media (min-width: 768px){
+  body{
+    background:
+      radial-gradient(closest-side, var(--primary-bg), transparent 70%) -10% -10%/55% 55% no-repeat,
+      radial-gradient(closest-side, var(--surface-2), transparent 70%) 110% 110%/55% 55% no-repeat,
+      var(--bg);
+    background-attachment:fixed;
+  }
+  .wrap{max-width:640px;}
+  .navbar{max-width:640px;}
+}
