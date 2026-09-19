@@ -31,6 +31,7 @@ import radio_episode_repository
 import radio_service
 import recipe_service
 import suggestion_history_repository
+import user_ratings_repository
 import voicevox_client
 import weight_repository
 
@@ -287,6 +288,31 @@ def quiz_answer():
     quiz_results_repository.save(user_id, question, is_correct)
 
     return jsonify({"is_correct": is_correct})
+
+
+@app.route("/admin/update-ratings", methods=["POST"])
+def update_ratings():
+    """週次でレーティングを更新する(did_replace成功率のみで計算。クイズは含めない)。
+
+    GitHub Actionsのスケジュール実行から週1回呼ばれる想定(design.md参照)。
+    ログインを必須にすると外部からの自動呼び出しができないため、この管理用
+    エンドポイントだけは@require_login_apiを付けていない。代わりに、環境変数
+    ADMIN_SECRETと一致するキーが無いと拒否する(誰でも叩けてしまわないため)。
+    """
+    if request.args.get("key") != os.environ.get("ADMIN_SECRET"):
+        return jsonify({"error": "unauthorized"}), 401
+
+    K = 32
+    performances = meal_logs_repository.fetch_this_week_success_rates()
+
+    updated = []
+    for user_id, performance in performances.items():
+        old_rating = user_ratings_repository.get(user_id)
+        new_rating = old_rating + K * (performance * 100 - 50) / 50
+        user_ratings_repository.update(user_id, new_rating)
+        updated.append(user_id)
+
+    return jsonify({"status": "ok", "updated_users": len(updated)})
 
 
 @app.route("/suggestions/latest", methods=["GET"])

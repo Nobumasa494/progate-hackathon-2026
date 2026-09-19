@@ -181,6 +181,31 @@ def fetch_total_saved(
     return sum(int(log["calorie_diff"] or 0) for log in logs)
 
 
+def fetch_this_week_success_rates(client: Optional[Client] = None) -> dict[str, float]:
+    """全ユーザーについて、今週のdid_replace成功率を返す(レーティング計算用)。
+
+    今週の記録が1件も無いユーザーは含まれない(その週はレーティングを更新しない)。
+    """
+    from datetime import datetime, timezone
+
+    client = client or get_client()
+    resp = client.table("meal_logs").select("user_id, did_replace, created_at").execute()
+    logs = resp.data
+
+    this_week = _week_start(datetime.now(timezone.utc).isoformat())
+
+    by_user: dict[str, list[bool]] = {}
+    for log in logs:
+        if _week_start(log["created_at"]) != this_week:
+            continue
+        by_user.setdefault(log["user_id"], []).append(bool(log["did_replace"]))
+
+    return {
+        user_id: sum(results) / len(results)
+        for user_id, results in by_user.items()
+    }
+
+
 def _week_start(created_at: str) -> str:
     """created_at（ISO8601）からその週の月曜日の日付（YYYY-MM-DD）を返す。"""
     from datetime import datetime, timedelta

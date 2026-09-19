@@ -156,15 +156,19 @@ MAX_RETRY = 1              # 再生成は最大1回まで(コスト対策)
 ```python
 @app.route("/admin/update-ratings", methods=["POST"])
 def update_ratings():
-    for user_id in all_active_users():
-        logs = filter_this_week(meal_logs_repository.fetch_logs(user_id))
-        performance = success_rate(logs)  # did_replace=True の割合
-        old_rating = user_ratings_repository.get(user_id) or 1200  # AtCoder初期値に倣う
-        K = 32
-        new_rating = old_rating + K * (performance * 100 - old_rating) / 100
+    if request.args.get("key") != os.environ.get("ADMIN_SECRET"):
+        return jsonify({"error": "unauthorized"}), 401
+
+    K = 32
+    performances = meal_logs_repository.fetch_this_week_success_rates()  # {user_id: 0.0〜1.0}
+    for user_id, performance in performances.items():
+        old_rating = user_ratings_repository.get(user_id)  # 未記録なら1200(AtCoder初期値に倣う)
+        new_rating = old_rating + K * (performance * 100 - 50) / 50
         user_ratings_repository.update(user_id, new_rating)
     return jsonify({"status": "ok"})
 ```
+
+**計算式の注意点(実装時に発覚したバグの記録)**: 当初`K * (performance * 100 - old_rating) / 100`という式を書いていたが、`performance*100`(0〜100の割合)と`old_rating`(1200スタートの絶対値)というスケールの違う数字を直接引き算しており、**成功率100%でもレーティングが下がる**という致命的なバグだった。実データで動かして初めて発覚した(design時点では気づけなかった)。「成功率50%を基準に、そこからの乖離で上下させる」形(`performance * 100 - 50`)に修正し、成功率100%なら+K、0%なら-K、50%なら±0になるようにした。
 
 色分け表示: 灰→茶→緑→水色→青→黄→橙→赤(AtCoderのレーティング色に倣う)
 
