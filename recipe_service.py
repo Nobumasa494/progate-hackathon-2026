@@ -61,6 +61,7 @@ def suggest_replacement(
     dish_name: str,
     target_daily_reduction_kcal: Optional[float] = None,
     allergens: Optional[list[str]] = None,
+    avoid_ingredients: Optional[list[str]] = None,
 ) -> dict:
     """置き換えレシピを提案する。
 
@@ -86,6 +87,13 @@ def suggest_replacement(
             "それを踏まえた提案にしてください。"
         )
 
+    avoid_instruction = ""
+    if avoid_ingredients:
+        avoid_instruction = (
+            f"\nこの人への過去の提案では、{'・'.join(avoid_ingredients)}を使っています。"
+            "今回はこれらを使わずに考えてください。"
+        )
+
     allergen_instruction = ""
     if allergens:
         allergen_instruction = (
@@ -99,7 +107,7 @@ def suggest_replacement(
         response_format={"type": "json_object"},
         temperature=1.2,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT + extra_instruction + allergen_instruction},
+            {"role": "system", "content": SYSTEM_PROMPT + extra_instruction + allergen_instruction + avoid_instruction},
             {"role": "user", "content": f"料理名: {dish_name}"},
         ],
     )

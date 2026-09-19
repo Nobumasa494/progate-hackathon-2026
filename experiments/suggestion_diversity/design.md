@@ -30,14 +30,32 @@
 | `dish_name` | 検索された元の料理名 |
 | `ingredients` | 提案された材料(JSON) |
 | `steps` | 提案された手順(JSON) |
+| `embedding` | 提案全体(名前+材料+手順)のEmbeddingsベクトル(float配列。JSON列に保存し、`pgvector`は使わない) |
 | `created_at` | 生成日時 |
 
 `/suggest`が呼ばれるたび(検索するたび。`/record`で記録したかは問わない)、必ず1件保存する。記録しなかった提案も対象にするのが、上記「長期的に飽きさせない」という動機に対応するために重要な点。
 
+`ingredients`・`steps`に加えて、`embedding`(提案全体をEmbeddings化したベクトル、float配列)も一緒に保存する。
+
+### RAG的な検索(dish_nameの完全一致ではなく、意味的な近さで検索する)
+
+当初`dish_name`の完全一致で履歴を絞り込む設計だったが、「ラーメン」「豚骨ラーメン」「つけ麺」のような表記ゆれをまたいで履歴を拾えない弱点があると判明したため、Embeddingsによる意味的な検索(RAGの考え方)に変更した。
+
+ただし、`pgvector`(Supabaseのベクトル検索拡張)は不採用とした。理由: `pgvector`は数千〜数万件規模のベクトルを高速検索するための専用インデックス技術であり、今のデータ規模(1ユーザーあたり多くても数十件)では性能上のメリットが実質無く、クラスタリングのときと同様「技術的に凝っているが、今の規模には見合っていない」判断だったため。代わりに、その都度Pythonで全件取得し、その場でコサイン類似度を計算する方式を採用する(データが数千件規模に増えたら`pgvector`の導入を再検討する)。
+
+```python
+def search_similar(user_id: str, query_embedding: list[float], limit: int = 5) -> list[dict]:
+    all_history = suggestion_history_repository.get_all(user_id)  # 全件取得(数十件程度)
+    scored = [(item, cosine_similarity(query_embedding, item["embedding"])) for item in all_history]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [item for item, score in scored[:limit]]
+```
+
 ### 処理の流れ
 ```python
-# 1. 直近5件の履歴を取得
-recent = suggestion_history_repository.get_recent(user_id, dish_name, limit=5)
+# 1. 今回の料理名をベクトル化し、意味的に近い履歴を検索する(dish_nameの完全一致ではない)
+query_embedding = get_embedding(dish_name)
+recent = search_similar(user_id, query_embedding, limit=5)
 
 # 2. 使われた食材をリスト化(重複除去)
 avoid_ingredients = extract_main_ingredients(recent)  # 例: ["豆腐", "鶏肉"]
@@ -50,17 +68,21 @@ result = recipe_service.suggest_replacement(
     avoid_ingredients=avoid_ingredients,   # 新規引数
 )
 
-# 4. Embeddingsで類似度チェック(直近1件と比較)
+# 4. Embeddingsで類似度チェック(検索で見つかった最も近い1件と比較)
 if recent:
-    similarity = check_similarity(build_text(result), build_text(recent[-1]))
+    result_embedding = get_embedding(build_text(result))
+    similarity = cosine_similarity(result_embedding, recent[0]["embedding"])
     if similarity > SIMILARITY_THRESHOLD:
         result = recipe_service.suggest_replacement(
             dish_name, target_daily_reduction_kcal=target,
             allergens=allergens, avoid_ingredients=avoid_ingredients,
         )  # 最大1回だけ再生成(コスト対策)
+        result_embedding = get_embedding(build_text(result))
 
-# 5. 履歴に保存
-suggestion_history_repository.save(user_id, dish_name, result["ingredients"], result["steps"])
+# 5. 履歴に保存(embeddingも一緒に保存する)
+suggestion_history_repository.save(
+    user_id, dish_name, result["ingredients"], result["steps"], result_embedding
+)
 ```
 
 `recipe_service.py`側の変更:

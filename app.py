@@ -22,12 +22,14 @@ from flask import Flask, jsonify, redirect, request, session
 load_dotenv()
 
 import auth_service
+import craving_similarity
 import goal_repository
 import latest_suggestions
 import meal_logs_repository
 import radio_episode_repository
 import radio_service
 import recipe_service
+import suggestion_history_repository
 import voicevox_client
 import weight_repository
 
@@ -217,10 +219,43 @@ def suggest():
     # プロフィールに設定されたアレルゲン(特定原材料)は提案に反映する
     allergens = auth_service.get_allergens(user_id)
 
+    # 提案の多様性チェック: dish_nameの完全一致ではなく、意味的に近い過去の
+    # 提案履歴(RAG)を探し、よく使われている食材を避けるようAIに指示する
+    # (experiments/suggestion_diversity/design.md 参照)
+    query_embedding = craving_similarity.get_embedding(dish_name)
+    recent = craving_similarity.search_similar(user_id, query_embedding)
+    avoid_ingredients = craving_similarity.extract_main_ingredients(recent)
+
     result = recipe_service.suggest_replacement(
         dish_name,
         target_daily_reduction_kcal=target,
         allergens=allergens,
+        avoid_ingredients=avoid_ingredients,
+    )
+
+    # 直近の提案と似すぎていないかEmbeddingsで確認し、似すぎていたら
+    # 最大1回だけ再生成する(それでも似ていたら受け入れる。粘りすぎない)
+    result_text = craving_similarity.build_text(
+        result["replacement_name"], result["ingredients"], result["steps"]
+    )
+    result_embedding = craving_similarity.get_embedding(result_text)
+    if recent:
+        similarity = craving_similarity.cosine_similarity(result_embedding, recent[0]["embedding"])
+        if similarity > 0.87:
+            result = recipe_service.suggest_replacement(
+                dish_name,
+                target_daily_reduction_kcal=target,
+                allergens=allergens,
+                avoid_ingredients=avoid_ingredients,
+            )
+            result_text = craving_similarity.build_text(
+                result["replacement_name"], result["ingredients"], result["steps"]
+            )
+            result_embedding = craving_similarity.get_embedding(result_text)
+
+    # 今回の提案を履歴に保存する(/recordで記録したかどうかに関係なく)
+    suggestion_history_repository.save(
+        user_id, dish_name, result["ingredients"], result["steps"], result_embedding
     )
 
     # 機能2が後で使えるように、最新の提案として保存しておく
