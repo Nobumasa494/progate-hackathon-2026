@@ -269,6 +269,9 @@ def suggest():
         "ingredients": result["ingredients"],
         "steps": result["steps"],
         "estimated_cost_yen": result["estimated_cost_yen"],
+        "trivia_question": result.get("trivia_question"),
+        "trivia_choices": result.get("trivia_choices"),
+        "trivia_answer": result.get("trivia_answer"),
     })
 
     return jsonify(result)
@@ -288,6 +291,15 @@ def quiz_answer():
     quiz_results_repository.save(user_id, question, is_correct)
 
     return jsonify({"is_correct": is_correct})
+
+
+@app.route("/rating", methods=["GET"])
+@require_login_api
+def rating():
+    """現在のレーティングと色を返す(画面表示用)。"""
+    user_id = session["user_id"]
+    value = user_ratings_repository.get(user_id)
+    return jsonify({"rating": value, "color": user_ratings_repository.rating_color(value)})
 
 
 @app.route("/admin/update-ratings", methods=["POST"])

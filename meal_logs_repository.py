@@ -182,27 +182,44 @@ def fetch_total_saved(
 
 
 def fetch_this_week_success_rates(client: Optional[Client] = None) -> dict[str, float]:
-    """全ユーザーについて、今週のdid_replace成功率を返す(レーティング計算用)。
+    """全ユーザーについて、今週の「検索した料理のうち、成功したものの割合」を返す(レーティング計算用)。
 
-    今週の記録が1件も無いユーザーは含まれない(その週はレーティングを更新しない)。
+    分母をmeal_logs(記録したものだけ)ではなく、suggestion_history(記録の有無を
+    問わない検索履歴)の料理名の集合にすることで、「失敗した時だけ記録しない」
+    という抜け道を防いでいる(design.md参照)。同じ料理を何度も検索しても
+    1件として数えるので、検索回数そのものでは不利にならない。
+
+    一度も検索していない週のユーザーは含まれない(その週はレーティングを更新しない)。
     """
+    import suggestion_history_repository
+
     from datetime import datetime, timezone
 
     client = client or get_client()
-    resp = client.table("meal_logs").select("user_id, did_replace, created_at").execute()
-    logs = resp.data
-
     this_week = _week_start(datetime.now(timezone.utc).isoformat())
 
-    by_user: dict[str, list[bool]] = {}
-    for log in logs:
+    # 分母: 今週、検索した料理名の集合(記録の有無を問わない)
+    history_client = suggestion_history_repository.get_client()
+    history_resp = history_client.table("suggestion_history").select("user_id, dish_name, created_at").execute()
+    searched: dict[str, set[str]] = {}
+    for row in history_resp.data:
+        if _week_start(row["created_at"]) != this_week:
+            continue
+        searched.setdefault(row["user_id"], set()).add(row["dish_name"])
+
+    # 分子: 今週、did_replace=Trueで記録された料理名の集合
+    logs_resp = client.table("meal_logs").select("user_id, dish_name, did_replace, created_at").execute()
+    succeeded: dict[str, set[str]] = {}
+    for log in logs_resp.data:
+        if not log["did_replace"]:
+            continue
         if _week_start(log["created_at"]) != this_week:
             continue
-        by_user.setdefault(log["user_id"], []).append(bool(log["did_replace"]))
+        succeeded.setdefault(log["user_id"], set()).add(log["dish_name"])
 
     return {
-        user_id: sum(results) / len(results)
-        for user_id, results in by_user.items()
+        user_id: len(succeeded.get(user_id, set()) & dishes) / len(dishes)
+        for user_id, dishes in searched.items()
     }
 
 
