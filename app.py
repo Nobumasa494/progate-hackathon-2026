@@ -26,6 +26,7 @@ import craving_similarity
 import goal_repository
 import latest_suggestions
 import meal_logs_repository
+import quiz_results_repository
 import radio_episode_repository
 import radio_service
 import recipe_service
@@ -270,6 +271,22 @@ def suggest():
     })
 
     return jsonify(result)
+
+
+@app.route("/quiz/answer", methods=["POST"])
+@require_login_api
+def quiz_answer():
+    """栄養豆知識クイズの回答を受け取り、正誤判定して保存する。レーティングには使わない。"""
+    user_id = session["user_id"]
+    data = request.get_json()
+    question = data.get("question")
+    choice = data.get("choice")
+    correct_answer = data.get("correct_answer")
+    is_correct = choice == correct_answer
+
+    quiz_results_repository.save(user_id, question, is_correct)
+
+    return jsonify({"is_correct": is_correct})
 
 
 @app.route("/suggestions/latest", methods=["GET"])

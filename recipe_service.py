@@ -42,6 +42,8 @@ SYSTEM_PROMPT = """\
 - 同じ料理名でも毎回同じ提案に偏らないよう、次のうちどれを軸にするかをランダムに選んでから考える:
   (a) 主な食材を低カロリーな別の食材に置き換える (b) 調理法を変える(揚げる→焼く/蒸す 等)
   (c) 主食の量や種類を調整する (d) 全体の構成を変えてボリュームで満足感を出す
+- 提案する料理(元の料理または置き換え後の料理)に関連した、意外性のある栄養豆知識を1つ、
+  3択クイズの形で作る(質問文・選択肢3つ・その中の正解を1つ)
 - 出力は必ず以下のJSON形式のみで返す。説明文や前置きは一切つけない。
 
 {
@@ -52,7 +54,10 @@ SYSTEM_PROMPT = """\
   "steps": ["string"],
   "replacement_calories": number,
   "calorie_diff": number,
-  "estimated_cost_yen": number
+  "estimated_cost_yen": number,
+  "trivia_question": "string",
+  "trivia_choices": ["string", "string", "string"],
+  "trivia_answer": "string"
 }
 """
 
