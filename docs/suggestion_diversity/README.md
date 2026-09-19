@@ -5,7 +5,7 @@
 
 このフォルダには検証用スクリプトと設計資料のみを置いている。実際にアプリへ組み込んだ実装本体は、リポジトリルートの[`craving_similarity.py`](../../craving_similarity.py)・[`suggestion_history_repository.py`](../../suggestion_history_repository.py)と、[`app.py`](../../app.py)の`/suggest`ルート・[`recipe_service.py`](../../recipe_service.py)の`suggest_replacement()`にある。
 
-チームとしてこの機能を採用するかはまだ未合意。個人の`experiment/craving-clusters`ブランチで実装済み。
+チームとしてこの機能を採用するかはまだ未合意。個人の`feature/suggestion-diversity`ブランチで実装済み。
 
 ## 背景・動機
 
