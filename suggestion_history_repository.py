@@ -62,9 +62,16 @@ def save(
     ingredients: list[dict],
     steps: list[str],
     embedding: list[float],
+    dish_name_embedding: list[float],
     client: Optional[Client] = None,
 ) -> None:
-    """提案を1件保存する。記録(meal_logs)の有無に関係なく、生成のたびに呼ぶ。"""
+    """提案を1件保存する。記録(meal_logs)の有無に関係なく、生成のたびに呼ぶ。
+
+    embedding: 提案全体(名前+材料+手順)のベクトル。生成後の類似度チェック用。
+    dish_name_embedding: 料理名だけのベクトル。検索時のクエリ(料理名)と
+        同じ「形」同士で比較しないと類似度が信頼できないと実データで判明した
+        ため、検索(RAG)にはこちらを使う。
+    """
     client = client or get_client()
     client.table("suggestion_history").insert({
         "user_id": user_id,
@@ -72,6 +79,7 @@ def save(
         "ingredients": ingredients,
         "steps": steps,
         "embedding": embedding,
+        "dish_name_embedding": dish_name_embedding,
     }).execute()
 
 

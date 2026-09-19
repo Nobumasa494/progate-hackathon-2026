@@ -65,6 +65,25 @@ def get(user_id: str, client: Optional[Client] = None) -> float:
     return float(rows[0]["rating"]) if rows else DEFAULT_RATING
 
 
+def get_rank(user_id: str, client: Optional[Client] = None) -> tuple[int, int]:
+    """全ユーザー中の順位(1位が最高)と、全体の人数を返す。
+
+    他人の名前や詳細は一切扱わず、数字の比較だけで順位を出す
+    (他人の情報を無断で見せない、というこのアプリの方針に沿う。design.md参照)。
+    まだ記録が無いユーザーはDEFAULT_RATINGとして順位に含める。
+    """
+    client = client or get_client()
+    response = client.table("user_ratings").select("user_id, rating").execute()
+    ratings = {row["user_id"]: float(row["rating"]) for row in response.data}
+
+    if user_id not in ratings:
+        ratings[user_id] = DEFAULT_RATING
+
+    sorted_ratings = sorted(ratings.values(), reverse=True)
+    rank = sorted_ratings.index(ratings[user_id]) + 1
+    return rank, len(ratings)
+
+
 def update(user_id: str, new_rating: float, client: Optional[Client] = None) -> None:
     """レーティングを更新する(無ければ新規作成、あれば上書き)。"""
     client = client or get_client()
@@ -72,6 +91,23 @@ def update(user_id: str, new_rating: float, client: Optional[Client] = None) -> 
         "user_id": user_id,
         "rating": new_rating,
     }).execute()
+
+
+RATING_LABELS = {
+    "grey": "灰",
+    "brown": "茶",
+    "green": "緑",
+    "cyan": "水色",
+    "blue": "青",
+    "yellow": "黄",
+    "orange": "橙",
+    "red": "赤",
+}
+
+
+def rating_label(rating: float) -> str:
+    """色だけに頼らず、色の名前を文字でも伝える(色覚の個人差への配慮)。"""
+    return RATING_LABELS[rating_color(rating)]
 
 
 def rating_color(rating: float) -> str:

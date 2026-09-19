@@ -257,7 +257,8 @@ def suggest():
 
     # 今回の提案を履歴に保存する(/recordで記録したかどうかに関係なく)
     suggestion_history_repository.save(
-        user_id, dish_name, result["ingredients"], result["steps"], result_embedding
+        user_id, dish_name, result["ingredients"], result["steps"],
+        result_embedding, query_embedding,
     )
 
     # 機能2が後で使えるように、最新の提案として保存しておく
@@ -296,10 +297,20 @@ def quiz_answer():
 @app.route("/rating", methods=["GET"])
 @require_login_api
 def rating():
-    """現在のレーティングと色を返す(画面表示用)。"""
+    """現在のレーティング・色・順位を返す(画面表示用)。
+
+    順位は数字の比較だけで出し、他ユーザーの名前などは一切返さない。
+    """
     user_id = session["user_id"]
     value = user_ratings_repository.get(user_id)
-    return jsonify({"rating": value, "color": user_ratings_repository.rating_color(value)})
+    rank, total = user_ratings_repository.get_rank(user_id)
+    return jsonify({
+        "rating": value,
+        "color": user_ratings_repository.rating_color(value),
+        "color_label": user_ratings_repository.rating_label(value),
+        "rank": rank,
+        "total": total,
+    })
 
 
 @app.route("/admin/update-ratings", methods=["POST"])
@@ -578,5 +589,15 @@ def discover_feed():
 if __name__ == "__main__":
     # デバッグモードは事故で本番に持ち込まないよう、明示的に環境変数で有効化した時だけONにする。
     # 開発中に使いたい場合は FLASK_DEBUG=1 を .env に設定する。
+    #
+    # debug_mode=Trueだと、Werkzeug(Flask標準)のリローダーが働き、
+    # .pyファイルを保存するたびにサーバープロセスごと自動で再起動してくれる。
+    # 一時、livereload(HTMLの自動ブラウザリロード)も試したが、livereloadは
+    # 独自のサーバーループ(Tornado)でWSGIアプリを動かす仕組みのため、
+    # Werkzeugのリローダーと共存できず、Pythonファイルの変更が反映されなく
+    # なることが実際に動かして判明した。今日ハマった不具合の大半がPythonの
+    # 修正だったため、HTMLの自動リロード(手動F5で代替可能)より、
+    # Python自動再起動(手動での気づきにくいミスを防ぐ)を優先し、
+    # livereloadは使わずFlask標準の仕組みに戻した。
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     app.run(host="127.0.0.1", port=8000, debug=debug_mode)
