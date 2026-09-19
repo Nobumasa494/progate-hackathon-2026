@@ -42,6 +42,8 @@ SYSTEM_PROMPT = """\
 - 同じ料理名でも毎回同じ提案に偏らないよう、次のうちどれを軸にするかをランダムに選んでから考える:
   (a) 主な食材を低カロリーな別の食材に置き換える (b) 調理法を変える(揚げる→焼く/蒸す 等)
   (c) 主食の量や種類を調整する (d) 全体の構成を変えてボリュームで満足感を出す
+- 提案する料理(元の料理または置き換え後の料理)に関連した、意外性のある栄養豆知識を1つ、
+  3択クイズの形で作る(質問文・選択肢3つ・その中の正解を1つ)
 - 出力は必ず以下のJSON形式のみで返す。説明文や前置きは一切つけない。
 
 {
@@ -52,7 +54,10 @@ SYSTEM_PROMPT = """\
   "steps": ["string"],
   "replacement_calories": number,
   "calorie_diff": number,
-  "estimated_cost_yen": number
+  "estimated_cost_yen": number,
+  "trivia_question": "string",
+  "trivia_choices": ["string", "string", "string"],
+  "trivia_answer": "string"
 }
 """
 
@@ -61,6 +66,7 @@ def suggest_replacement(
     dish_name: str,
     target_daily_reduction_kcal: Optional[float] = None,
     allergens: Optional[list[str]] = None,
+    avoid_ingredients: Optional[list[str]] = None,
 ) -> dict:
     """置き換えレシピを提案する。
 
@@ -86,6 +92,13 @@ def suggest_replacement(
             "それを踏まえた提案にしてください。"
         )
 
+    avoid_instruction = ""
+    if avoid_ingredients:
+        avoid_instruction = (
+            f"\nこの人への過去の提案では、{'・'.join(avoid_ingredients)}を使っています。"
+            "今回はこれらを使わずに考えてください。"
+        )
+
     allergen_instruction = ""
     if allergens:
         allergen_instruction = (
@@ -99,7 +112,7 @@ def suggest_replacement(
         response_format={"type": "json_object"},
         temperature=1.2,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT + extra_instruction + allergen_instruction},
+            {"role": "system", "content": SYSTEM_PROMPT + extra_instruction + allergen_instruction + avoid_instruction},
             {"role": "user", "content": f"料理名: {dish_name}"},
         ],
     )

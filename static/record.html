@@ -19,6 +19,19 @@
   .choice.active{background:var(--primary);color:#fff;}
   .confirm{background:var(--primary-bg);border-radius:14px;padding:16px 20px;color:var(--primary-dark);font-weight:700;font-size:14px;margin-top:20px;display:none;}
   .confirm.show{display:block;}
+  .rating-badge{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:13px;padding:6px 14px;border-radius:999px;margin-bottom:14px;color:#fff;}
+  .rating-grey{background:#9e9e9e;} .rating-brown{background:#8d6e63;} .rating-green{background:#2e7d4f;}
+  .rating-cyan{background:#00acc1;} .rating-blue{background:#3949ab;} .rating-yellow{background:#c9a227;}
+  .rating-orange{background:#ef6c00;} .rating-red{background:#c62828;}
+  .quiz-card{background:var(--surface-2);border-radius:16px;padding:16px 20px;margin-bottom:16px;}
+  .quiz-question{font-weight:700;font-size:14px;margin-bottom:12px;}
+  .quiz-choice{display:block;width:100%;text-align:left;padding:10px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);margin-bottom:8px;cursor:pointer;font-size:13px;}
+  .quiz-choice.correct{background:var(--primary-bg);border-color:var(--primary);}
+  .quiz-choice.wrong{background:var(--warn-bg);border-color:var(--warn);}
+  .quiz-result{font-size:13px;font-weight:700;margin-top:8px;}
+  .rating-legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--ink-dim);margin-bottom:16px;}
+  .rating-legend span{display:inline-flex;align-items:center;gap:3px;}
+  .rating-legend .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
 </style>
 </head>
 <body>
@@ -33,7 +46,21 @@
   <h1>実際に食べましたか?</h1>
   <p class="sub">最新の提案をもとに、実際に食べた内容を記録します</p>
 
+  <div id="rating-badge"></div>
+  <div class="rating-legend" id="rating-legend">
+    <span><span class="dot" style="background:#9e9e9e;"></span>灰(0〜399)</span>
+    <span><span class="dot" style="background:#8d6e63;"></span>茶(400〜799)</span>
+    <span><span class="dot" style="background:#2e7d4f;"></span>緑(800〜1199)</span>
+    <span><span class="dot" style="background:#00acc1;"></span>水色(1200〜1599)</span>
+    <span><span class="dot" style="background:#3949ab;"></span>青(1600〜1999)</span>
+    <span><span class="dot" style="background:#c9a227;"></span>黄(2000〜2399)</span>
+    <span><span class="dot" style="background:#ef6c00;"></span>橙(2400〜2799)</span>
+    <span><span class="dot" style="background:#c62828;"></span>赤(2800〜)</span>
+  </div>
+
   <div id="suggest-area"><p class="loading">最新の提案を読み込み中...</p></div>
+
+  <div id="quiz-area"></div>
 
   <div class="card" id="form-area" style="display:none;">
     <div class="label">実際はどうでしたか?</div>
@@ -82,6 +109,57 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
+async function loadRating() {
+  try {
+    const res = await fetch("/rating");
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById("rating-badge").innerHTML = "";
+    const badge = el("span", {
+      className: `rating-badge rating-${data.color}`,
+      text: `レーティング ${Math.round(data.rating)}[${data.color_label}](🏆 ${data.rank}位 / ${data.total}人中)`,
+    });
+    document.getElementById("rating-badge").appendChild(badge);
+  } catch (e) {
+    // レーティングが取れなくても他の機能は使えるようにする(致命的エラーにしない)
+  }
+}
+
+function renderQuiz(suggestion) {
+  const area = document.getElementById("quiz-area");
+  area.innerHTML = "";
+  if (!suggestion.trivia_question) return;
+
+  const card = el("div", { className: "quiz-card" });
+  card.appendChild(el("div", { className: "quiz-question", text: `🧠 ${suggestion.trivia_question}` }));
+
+  const resultEl = el("div", { className: "quiz-result" });
+
+  suggestion.trivia_choices.forEach(choice => {
+    const btn = el("button", { className: "quiz-choice", text: choice });
+    btn.addEventListener("click", async () => {
+      card.querySelectorAll(".quiz-choice").forEach(b => b.disabled = true);
+      const isCorrect = choice === suggestion.trivia_answer;
+      btn.classList.add(isCorrect ? "correct" : "wrong");
+      resultEl.textContent = isCorrect ? "正解!" : `不正解。正解は「${suggestion.trivia_answer}」`;
+
+      await fetch("/quiz/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: suggestion.trivia_question,
+          choice,
+          correct_answer: suggestion.trivia_answer,
+        }),
+      });
+    });
+    card.appendChild(btn);
+  });
+
+  card.appendChild(resultEl);
+  area.appendChild(card);
+}
+
 async function loadSuggestion() {
   const area = document.getElementById("suggest-area");
   try {
@@ -115,6 +193,7 @@ async function loadSuggestion() {
 
     document.getElementById("form-area").style.display = "block";
     document.getElementById("actual-cal").value = suggestion.replacement_calories;
+    renderQuiz(suggestion);
   } catch (e) {
     area.innerHTML = `<p class="error">読み込みに失敗しました。</p>`;
   }
@@ -190,6 +269,7 @@ document.getElementById("record-btn").addEventListener("click", async () => {
 });
 
 loadSuggestion();
+loadRating();
 </script>
 </body>
 </html>
