@@ -19,7 +19,7 @@
   .choice.active{background:var(--primary);color:#fff;}
   .confirm{background:var(--primary-bg);border-radius:14px;padding:16px 20px;color:var(--primary-dark);font-weight:700;font-size:14px;margin-top:20px;display:none;}
   .confirm.show{display:block;}
-  .rating-badge{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:13px;padding:6px 14px;border-radius:999px;margin-bottom:14px;color:#fff;}
+  .rating-badge{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:13px;padding:6px 14px;border-radius:999px;margin-bottom:14px;color:#fff;text-decoration:none;}
   .rating-grey{background:#9e9e9e;} .rating-brown{background:#8d6e63;} .rating-green{background:#2e7d4f;}
   .rating-cyan{background:#00acc1;} .rating-blue{background:#3949ab;} .rating-yellow{background:#c9a227;}
   .rating-orange{background:#ef6c00;} .rating-red{background:#c62828;}
@@ -115,9 +115,10 @@ async function loadRating() {
     if (!res.ok) return;
     const data = await res.json();
     document.getElementById("rating-badge").innerHTML = "";
-    const badge = el("span", {
+    const badge = el("a", {
       className: `rating-badge rating-${data.color}`,
-      text: `レーティング ${Math.round(data.rating)}[${data.color_label}](🏆 ${data.rank}位 / ${data.total}人中)`,
+      href: "/leaderboard",
+      text: `レーティング ${Math.round(data.rating)}[${data.color_label}](🏆 ${data.rank}位 / ${data.total}人中) ›`,
     });
     document.getElementById("rating-badge").appendChild(badge);
   } catch (e) {
@@ -190,6 +191,56 @@ async function loadSuggestion() {
     suggestion.steps.forEach(s => ol.appendChild(el("li", { text: s })));
     detailCard.appendChild(ol);
     area.appendChild(detailCard);
+
+    // 「探すクエスト」への入り口。新しいナビタブは増やさず、提案の直後だけに表示する。
+    // どの食材を探すかは、AIが勝手に1つ選ぶのではなく、本人が自分で選べるようにする
+    if (suggestion.ingredients.length > 0) {
+      const questCard = el("div", { className: "card", style: "margin-bottom:16px;" });
+      questCard.appendChild(el("div", { className: "label", text: "どの食材を探しに行く?(複数選択可)" }));
+      const questChoices = el("div", { style: "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;" });
+      const selected = new Set();
+      const goBtn = el("a", {
+        className: "btn",
+        text: "探しに行く",
+        style: "width:100%;display:block;text-align:center;text-decoration:none;pointer-events:none;opacity:0.4;",
+      });
+      const updateGoBtn = () => {
+        if (selected.size === 0) {
+          goBtn.style.pointerEvents = "none";
+          goBtn.style.opacity = "0.4";
+          goBtn.removeAttribute("href");
+          return;
+        }
+        const qs = [...selected].map((n) => `dish_name=${encodeURIComponent(n)}`).join("&");
+        goBtn.href = `/quest?${qs}`;
+        goBtn.style.pointerEvents = "auto";
+        goBtn.style.opacity = "1";
+      };
+      suggestion.ingredients.forEach((i) => {
+        const chip = el("button", {
+          type: "button",
+          className: "btn btn-ghost",
+          text: i.name,
+          style: "padding:10px 16px;font-size:13px;",
+        });
+        chip.addEventListener("click", () => {
+          if (selected.has(i.name)) {
+            selected.delete(i.name);
+            chip.classList.remove("btn");
+            chip.classList.add("btn-ghost");
+          } else {
+            selected.add(i.name);
+            chip.classList.remove("btn-ghost");
+            chip.classList.add("btn");
+          }
+          updateGoBtn();
+        });
+        questChoices.appendChild(chip);
+      });
+      questCard.appendChild(questChoices);
+      questCard.appendChild(goBtn);
+      area.appendChild(questCard);
+    }
 
     document.getElementById("form-area").style.display = "block";
     document.getElementById("actual-cal").value = suggestion.replacement_calories;
