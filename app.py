@@ -23,6 +23,7 @@ load_dotenv()
 
 import auth_service
 import craving_similarity
+import discovery_repository
 import goal_repository
 import latest_suggestions
 import meal_logs_repository
@@ -127,6 +128,7 @@ def page_profile():
 def get_profile_data():
     profile = auth_service.get_profile(session["user_id"])
     return jsonify({
+        "nickname": profile.get("nickname", ""),
         "favorite_things": profile.get("favorite_things", ""),
         "interests": profile.get("interests", ""),
         "allergens": auth_service.get_allergens(session["user_id"]),
@@ -140,6 +142,7 @@ def get_profile_data():
 def update_profile_data():
     data = request.get_json(silent=True) or {}
     fields = {
+        "nickname": data.get("nickname", "").strip()[:20],
         "favorite_things": data.get("favorite_things", ""),
         "interests": data.get("interests", ""),
     }
@@ -181,6 +184,12 @@ def page_recipe():
 @require_login_page
 def page_record():
     return app.send_static_file("record.html")
+
+
+@app.route("/quest")
+@require_login_page
+def page_quest():
+    return app.send_static_file("quest.html")
 
 
 @app.route("/goals")
@@ -294,6 +303,57 @@ def quiz_answer():
     return jsonify({"is_correct": is_correct})
 
 
+@app.route("/maps-key", methods=["GET"])
+@require_login_api
+def maps_key():
+    """Google Maps Demo Keyを返す(quest.htmlがこれを使って地図APIを読み込む)。
+
+    Mapsのキーはブラウザ側で必ず露出する性質のものなので秘匿する意味は無いが、
+    静的HTMLファイルに直接書き込まず.env経由にしておけば、後でキーを
+    差し替えるときにコードの変更が不要になる。
+    """
+    return jsonify({"key": os.environ.get("GOOGLE_MAPS_API_KEY", "")})
+
+
+@app.route("/discoveries", methods=["GET"])
+@require_login_api
+def discoveries_list():
+    """指定した食材の発見報告を返す(地図にピンを立てるのに使う)。"""
+    dish_name = request.args.get("dish_name")
+    if not dish_name:
+        return jsonify({"error": "dish_name が必要です"}), 400
+    results = discovery_repository.get_by_dish(dish_name)
+    return jsonify(results)
+
+
+@app.route("/discoveries", methods=["POST"])
+@require_login_api
+def discoveries_create():
+    """発見報告を登録する(写真アップロード込み)。同じ店で複数食材を見つけた場合、
+    dish_nameを複数指定すると、写真は1回のアップロードで使い回し、食材ごとに1行ずつ保存する。"""
+    user_id = session["user_id"]
+    dish_names = request.form.getlist("dish_name")
+    store_name = request.form.get("store_name")
+    lat = request.form.get("lat")
+    lng = request.form.get("lng")
+    photo = request.files.get("photo")
+    comment = request.form.get("comment") or None
+
+    if not (dish_names and store_name and lat and lng and photo):
+        return jsonify({"error": "dish_name, store_name, lat, lng, photo が必要です"}), 400
+
+    lat, lng = float(lat), float(lng)
+    is_pioneer = discovery_repository.is_new_store(lat, lng)
+    photo_url = discovery_repository.upload_photo(user_id, photo.read(), photo.content_type)
+    results = [
+        discovery_repository.save(
+            user_id, dish_name, store_name, lat, lng, photo_url, comment, is_pioneer
+        )
+        for dish_name in dish_names
+    ]
+    return jsonify(results)
+
+
 @app.route("/rating", methods=["GET"])
 @require_login_api
 def rating():
@@ -311,6 +371,39 @@ def rating():
         "rank": rank,
         "total": total,
     })
+
+
+@app.route("/leaderboard", methods=["GET"])
+@require_login_page
+def page_leaderboard():
+    return app.send_static_file("leaderboard.html")
+
+
+@app.route("/leaderboard/data", methods=["GET"])
+@require_login_api
+def leaderboard_data():
+    """ニックネーム・レーティング・開拓者バッジ数のランキングを返す。
+
+    ニックネームは実名ではなく本人が自由に設定するものであり、他ユーザーの
+    情報を無断で見せない方針(design.md参照)とは別枠として、全ユーザー
+    デフォルト表示にしている(未設定の場合は「匿名ユーザー」と表示)。
+    """
+    badge_counts = discovery_repository.count_pioneer_badges()
+    entries = []
+    for row in user_ratings_repository.get_all():
+        user_id = row["user_id"]
+        rating_value = float(row["rating"])
+        nickname = auth_service.get_profile(user_id).get("nickname") or "匿名ユーザー"
+        entries.append({
+            "nickname": nickname,
+            "rating": round(rating_value),
+            "color": user_ratings_repository.rating_color(rating_value),
+            "color_label": user_ratings_repository.rating_label(rating_value),
+            "badges": badge_counts.get(user_id, 0),
+            "is_me": user_id == session["user_id"],
+        })
+    entries.sort(key=lambda e: e["rating"], reverse=True)
+    return jsonify(entries)
 
 
 @app.route("/admin/update-ratings", methods=["POST"])
