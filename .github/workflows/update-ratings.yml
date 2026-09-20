@@ -1,0 +1,14 @@
+name: Weekly Rating Update
+
+on:
+  schedule:
+    - cron: "0 0 * * 1" # 毎週月曜0時(UTC)
+  workflow_dispatch: # 手動で試し実行したいときのためのボタン
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call rating update endpoint
+        run: |
+          curl -f -X POST "https://progate-hackathon-2026.onrender.com/admin/update-ratings?key=${{ secrets.ADMIN_SECRET }}"

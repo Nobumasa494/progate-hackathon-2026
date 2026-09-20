@@ -22,12 +22,16 @@ from flask import Flask, jsonify, redirect, request, session
 load_dotenv()
 
 import auth_service
+import craving_similarity
 import goal_repository
 import latest_suggestions
 import meal_logs_repository
+import quiz_results_repository
 import radio_episode_repository
 import radio_service
 import recipe_service
+import suggestion_history_repository
+import user_ratings_repository
 import voicevox_client
 import weight_repository
 
@@ -217,10 +221,44 @@ def suggest():
     # プロフィールに設定されたアレルゲン(特定原材料)は提案に反映する
     allergens = auth_service.get_allergens(user_id)
 
+    # 提案の多様性チェック: dish_nameの完全一致ではなく、意味的に近い過去の
+    # 提案履歴(RAG)を探し、よく使われている食材を避けるようAIに指示する
+    # (experiments/suggestion_diversity/design.md 参照)
+    query_embedding = craving_similarity.get_embedding(dish_name)
+    recent = craving_similarity.search_similar(user_id, query_embedding)
+    avoid_ingredients = craving_similarity.extract_main_ingredients(recent)
+
     result = recipe_service.suggest_replacement(
         dish_name,
         target_daily_reduction_kcal=target,
         allergens=allergens,
+        avoid_ingredients=avoid_ingredients,
+    )
+
+    # 直近の提案と似すぎていないかEmbeddingsで確認し、似すぎていたら
+    # 最大1回だけ再生成する(それでも似ていたら受け入れる。粘りすぎない)
+    result_text = craving_similarity.build_text(
+        result["replacement_name"], result["ingredients"], result["steps"]
+    )
+    result_embedding = craving_similarity.get_embedding(result_text)
+    if recent:
+        similarity = craving_similarity.cosine_similarity(result_embedding, recent[0]["embedding"])
+        if similarity > 0.87:
+            result = recipe_service.suggest_replacement(
+                dish_name,
+                target_daily_reduction_kcal=target,
+                allergens=allergens,
+                avoid_ingredients=avoid_ingredients,
+            )
+            result_text = craving_similarity.build_text(
+                result["replacement_name"], result["ingredients"], result["steps"]
+            )
+            result_embedding = craving_similarity.get_embedding(result_text)
+
+    # 今回の提案を履歴に保存する(/recordで記録したかどうかに関係なく)
+    suggestion_history_repository.save(
+        user_id, dish_name, result["ingredients"], result["steps"],
+        result_embedding, query_embedding,
     )
 
     # 機能2が後で使えるように、最新の提案として保存しておく
@@ -232,9 +270,72 @@ def suggest():
         "ingredients": result["ingredients"],
         "steps": result["steps"],
         "estimated_cost_yen": result["estimated_cost_yen"],
+        "trivia_question": result.get("trivia_question"),
+        "trivia_choices": result.get("trivia_choices"),
+        "trivia_answer": result.get("trivia_answer"),
     })
 
     return jsonify(result)
+
+
+@app.route("/quiz/answer", methods=["POST"])
+@require_login_api
+def quiz_answer():
+    """栄養豆知識クイズの回答を受け取り、正誤判定して保存する。レーティングには使わない。"""
+    user_id = session["user_id"]
+    data = request.get_json()
+    question = data.get("question")
+    choice = data.get("choice")
+    correct_answer = data.get("correct_answer")
+    is_correct = choice == correct_answer
+
+    quiz_results_repository.save(user_id, question, is_correct)
+
+    return jsonify({"is_correct": is_correct})
+
+
+@app.route("/rating", methods=["GET"])
+@require_login_api
+def rating():
+    """現在のレーティング・色・順位を返す(画面表示用)。
+
+    順位は数字の比較だけで出し、他ユーザーの名前などは一切返さない。
+    """
+    user_id = session["user_id"]
+    value = user_ratings_repository.get(user_id)
+    rank, total = user_ratings_repository.get_rank(user_id)
+    return jsonify({
+        "rating": value,
+        "color": user_ratings_repository.rating_color(value),
+        "color_label": user_ratings_repository.rating_label(value),
+        "rank": rank,
+        "total": total,
+    })
+
+
+@app.route("/admin/update-ratings", methods=["POST"])
+def update_ratings():
+    """週次でレーティングを更新する(did_replace成功率のみで計算。クイズは含めない)。
+
+    GitHub Actionsのスケジュール実行から週1回呼ばれる想定(design.md参照)。
+    ログインを必須にすると外部からの自動呼び出しができないため、この管理用
+    エンドポイントだけは@require_login_apiを付けていない。代わりに、環境変数
+    ADMIN_SECRETと一致するキーが無いと拒否する(誰でも叩けてしまわないため)。
+    """
+    if request.args.get("key") != os.environ.get("ADMIN_SECRET"):
+        return jsonify({"error": "unauthorized"}), 401
+
+    K = 32
+    performances = meal_logs_repository.fetch_this_week_success_rates()
+
+    updated = []
+    for user_id, performance in performances.items():
+        old_rating = user_ratings_repository.get(user_id)
+        new_rating = old_rating + K * (performance * 100 - 50) / 50
+        user_ratings_repository.update(user_id, new_rating)
+        updated.append(user_id)
+
+    return jsonify({"status": "ok", "updated_users": len(updated)})
 
 
 @app.route("/suggestions/latest", methods=["GET"])
@@ -488,5 +589,15 @@ def discover_feed():
 if __name__ == "__main__":
     # デバッグモードは事故で本番に持ち込まないよう、明示的に環境変数で有効化した時だけONにする。
     # 開発中に使いたい場合は FLASK_DEBUG=1 を .env に設定する。
+    #
+    # debug_mode=Trueだと、Werkzeug(Flask標準)のリローダーが働き、
+    # .pyファイルを保存するたびにサーバープロセスごと自動で再起動してくれる。
+    # 一時、livereload(HTMLの自動ブラウザリロード)も試したが、livereloadは
+    # 独自のサーバーループ(Tornado)でWSGIアプリを動かす仕組みのため、
+    # Werkzeugのリローダーと共存できず、Pythonファイルの変更が反映されなく
+    # なることが実際に動かして判明した。今日ハマった不具合の大半がPythonの
+    # 修正だったため、HTMLの自動リロード(手動F5で代替可能)より、
+    # Python自動再起動(手動での気づきにくいミスを防ぐ)を優先し、
+    # livereloadは使わずFlask標準の仕組みに戻した。
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     app.run(host="127.0.0.1", port=8000, debug=debug_mode)
