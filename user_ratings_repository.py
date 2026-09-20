@@ -84,6 +84,13 @@ def get_rank(user_id: str, client: Optional[Client] = None) -> tuple[int, int]:
     return rank, len(ratings)
 
 
+def get_all(client: Optional[Client] = None) -> list[dict]:
+    """全ユーザーのレーティングを返す(リーダーボード用)。まだ記録が無いユーザーは含まない。"""
+    client = client or get_client()
+    response = client.table("user_ratings").select("user_id, rating").execute()
+    return response.data
+
+
 def update(user_id: str, new_rating: float, client: Optional[Client] = None) -> None:
     """レーティングを更新する(無ければ新規作成、あれば上書き)。"""
     client = client or get_client()

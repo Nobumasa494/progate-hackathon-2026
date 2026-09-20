@@ -19,7 +19,14 @@
 
   <div class="eyebrow">設定</div>
   <h1>プロフィール</h1>
-  <p class="sub">深夜ラジオ機能(実験中)で使う情報です</p>
+
+  <div class="card">
+    <div class="label">ニックネーム</div>
+    <input class="input" id="nickname" type="text" maxlength="20" placeholder="例: たろう" style="margin-bottom:14px;">
+    <p class="sub" style="margin-top:-8px;margin-bottom:14px;">「みんな」画面のランキングなどで表示されます(未設定の場合は匿名で表示)</p>
+  </div>
+
+  <p class="sub">以下は深夜ラジオ機能(実験中)で使う情報です</p>
 
   <div class="card">
     <div class="label">好きなこと</div>
@@ -55,6 +62,7 @@
 renderNav("profile");
 document.getElementById("logout-btn").addEventListener("click", logout);
 
+const nicknameInput = document.getElementById("nickname");
 const favoriteThingsInput = document.getElementById("favorite-things");
 const interestsInput = document.getElementById("interests");
 const voiceASelect = document.getElementById("voice-a");
@@ -102,6 +110,7 @@ let profileForVoices = null;
 async function load() {
   const profileRes = await fetch("/profile/data");
   const profile = await profileRes.json();
+  nicknameInput.value = profile.nickname || "";
   favoriteThingsInput.value = profile.favorite_things || "";
   interestsInput.value = profile.interests || "";
   renderAllergenCheckboxes(profile.allergens || []);
@@ -143,6 +152,7 @@ saveBtn.addEventListener("click", async () => {
   saveErrorEl.style.display = "none";
 
   const body = {
+    nickname: nicknameInput.value.trim(),
     favorite_things: favoriteThingsInput.value.trim(),
     interests: interestsInput.value.trim(),
     allergens: Array.from(allergenList.querySelectorAll("input:checked")).map(c => c.value),
