@@ -1,32 +1,32 @@
 :root{
-  --bg: #f3f8f4;
-  --surface: #ffffff;
-  --surface-2: #eef6f0;
-  --border: #dfeadf;
-  --ink: #1c2b20;
-  --ink-dim: #6c7d70;
+  --bg:#fff9fb;
+  --surface:#ffffff;
+  --surface-2:#f7f0ff;
+  --border:#eadcf5;
+  --ink:#3d3550;
+  --ink-dim:#6b6180;
 
-  --primary: #2e7d4f;
-  --primary-dark: #205c3a;
-  --primary-bg: #e3f3e7;
+  --primary:#7357c4;
+  --primary-dark:#5f47a8;
+  --primary-bg:#efe8fb;
 
-  --recipe: #2e7d4f; --recipe-bg: #e3f3e7;
-  --logs: #2e7d4f; --logs-bg: #e3f3e7;
-  --goal: #2e7d4f; --goal-bg: #e3f3e7;
-  --weight: #2e7d4f; --weight-bg: #e3f3e7;
-  --warn: #c1502e; --warn-bg: #fbe7e0;
-  --down: #2e7d4f; --up: #c1502e;
+  --recipe: var(--primary); --recipe-bg: var(--primary-bg);
+  --logs: var(--primary); --logs-bg: var(--primary-bg);
+  --goal: var(--primary); --goal-bg: var(--primary-bg);
+  --weight: var(--primary); --weight-bg: var(--primary-bg);
+  --warn:#c8385a; --warn-bg:#ffe8ee;
+  --down:#1f7f72; --up:#c8385a;
 
-  --ai-a: #2e7d4f; --ai-b: #17a589; --ai-c: #7c5cbf;
+  --ai-a:#d9558f; --ai-b:#8b63d9; --ai-c:#2f9e8f;
   --ai-gradient: linear-gradient(135deg, var(--ai-a), var(--ai-b) 55%, var(--ai-c));
 
   /* Bootstrapの色をアプリの配色に上書きする */
-  --bs-primary: #2e7d4f;
-  --bs-primary-rgb: 46,125,79;
-  --bs-body-font-family: 'Zen Kaku Gothic New', sans-serif;
-  --bs-border-radius: 14px;
-  --bs-border-radius-lg: 20px;
-  --bs-border-radius-pill: 999px;
+  --bs-primary:#7357c4;
+  --bs-primary-rgb:115,87,196;
+  --bs-body-font-family:'Zen Kaku Gothic New', sans-serif;
+  --bs-border-radius:14px;
+  --bs-border-radius-lg:20px;
+  --bs-border-radius-pill:999px;
 }
 
 *{box-sizing:border-box;}
@@ -103,6 +103,23 @@ ul,ol{margin:0;padding-left:20px;font-size:14px;line-height:1.9;}
 }
 .sparkle{display:inline-block;animation:sparkle-pulse 1.8s ease-in-out infinite;}
 @keyframes sparkle-pulse{0%,100%{opacity:0.55;transform:scale(0.9);}50%{opacity:1;transform:scale(1.1);}}
+
+/* 入力欄: 背景・枠線・サンプル文字を、見えにくい人にも読めるコントラストにする。
+   input.form-control とタグ付きにしているのは、login/signupのページ内<style>の
+   .form-controlより詳細度を上げて、そちらに上書きされないようにするため。 */
+.input, input.form-control{
+  background:#ffffff;
+  border:1.5px solid #8d7bc4;
+}
+.input::placeholder, input.form-control::placeholder{
+  color:#6b6180;
+  opacity:1;
+}
+.input:focus, input.form-control:focus{
+  outline:none;
+  border-color:var(--primary);
+  box-shadow:0 0 0 0.2rem rgba(115,87,196,0.25);
+}
 
 /* 画面が広い(PCなど)ときだけ、中身を少し広げて左右の余白の印象を和らげる。
    スマホ幅(768px未満)にはこのブロックは一切適用されないため、見た目は変わらない。
