@@ -31,8 +31,12 @@
 
 *{box-sizing:border-box;}
 body{
-  margin:0;background:var(--bg);color:var(--ink);
+  margin:0;color:var(--ink);
   font-family:'Zen Kaku Gothic New',sans-serif;
+  background-color:var(--bg);
+  background-image:linear-gradient(rgba(243,248,244,0.55), rgba(243,248,244,0.55)), url("images/bg-pattern.jpg");
+  background-repeat:repeat;
+  background-size:auto, 320px 320px;
 }
 a{color:var(--primary);}
 .wrap{max-width:480px;margin:0 auto;padding:20px 18px 100px;}
@@ -128,8 +132,8 @@ ul,ol{margin:0;padding-left:20px;font-size:14px;line-height:1.9;}
 @media (min-width: 768px){
   body{
     background:
-      radial-gradient(closest-side, var(--primary-bg), transparent 70%) -10% -10%/55% 55% no-repeat,
-      radial-gradient(closest-side, var(--surface-2), transparent 70%) 110% 110%/55% 55% no-repeat,
+      linear-gradient(rgba(243,248,244,0.55), rgba(243,248,244,0.55)) 0 0/auto repeat,
+      url("images/bg-pattern.jpg") 0 0/320px 320px repeat,
       var(--bg);
     background-attachment:fixed;
   }

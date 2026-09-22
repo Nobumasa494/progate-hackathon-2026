@@ -123,7 +123,7 @@ def _check_and_save_milestones(user_id: str, profile: dict) -> None:
     streak = _calculate_streak(user_id)
     best_streak = profile.get("best_streak", 0)
     if streak >= 2 and streak > best_streak:
-        _save_milestone(user_id, f"連勝記録を更新した(今までの最高{best_streak}日→今回{streak}日)")
+        _save_milestone(user_id, f"連勝記録を更新した(今までの最高{best_streak}回→今回{streak}回)")
         updates["best_streak"] = streak
 
     latest_weight = weight_repository.get_latest_weight(user_id)

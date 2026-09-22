@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>深夜ラジオ(実験中) - 置き換えダイエット</title>
+<title>深夜ラジオ - 置き換えダイエット</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/png" href="images/app-icon.png">
+<link rel="apple-touch-icon" href="images/app-icon.png">
 <style>
   :root{
     --radioA: oklch(52% 0.14 300); --radioA-bg: oklch(93% 0.05 300);
@@ -21,15 +23,20 @@
     background:linear-gradient(180deg, #f4f4f6 0%, #ffffff 62%, #ffffff 100%);
     padding:22px 10px 0;
   }
-  .stage::before,.stage::after{
-    content:"";position:absolute;top:-10%;width:55%;height:120%;
-    filter:blur(2px);opacity:0.55;pointer-events:none;
-  }
-  .stage::before{left:-10%;background:radial-gradient(closest-side, var(--radioA-bg), transparent 70%);}
-  .stage::after{right:-10%;background:radial-gradient(closest-side, var(--radioB-bg), transparent 70%);}
   .stage-floor{position:absolute;left:0;right:0;bottom:0;height:1px;background:#e5e5ea;}
   .dj-row{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:0;}
   .dj-chip{display:flex;flex-direction:column;align-items:center;gap:2px;position:relative;}
+
+  .stage.talking .dj-chip.a .dj-avatar-img{animation:dj-talk-a 1.1s ease-in-out infinite;}
+  .stage.talking .dj-chip.b .dj-avatar-img{animation:dj-talk-b 1.1s ease-in-out infinite;}
+  @keyframes dj-talk-a{
+    0%,100%{transform:scaleX(-1) translateY(0) rotate(0deg);}
+    25%{transform:scaleX(-1) translateY(-4px) rotate(-2deg);}
+  }
+  @keyframes dj-talk-b{
+    0%,50%{transform:translateY(0) rotate(0deg);}
+    75%{transform:translateY(-4px) rotate(2deg);}
+  }
   .dj-chip.a{margin-right:-14px;}
   .dj-chip.b{margin-left:-14px;}
   .dj-avatar-img{width:110px;height:auto;display:block;}
@@ -58,6 +65,9 @@
   .wave span:nth-child(9){animation-delay:.2s;} .wave span:nth-child(10){animation-delay:.1s;}
   @keyframes bounce{0%,100%{height:5px;}50%{height:20px;}}
 
+  #generating-stage img{animation:stage-bounce 1s ease-in-out infinite;}
+  @keyframes stage-bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+
   .onair-dot{width:8px;height:8px;border-radius:50%;background:#c8c8ce;transition:background .3s,box-shadow .3s;}
   .onair.live .onair-dot{background:var(--onair);box-shadow:0 0 8px 1px color-mix(in oklch, var(--onair) 60%, transparent);animation:pulse 1.4s infinite;}
   .onair.live{color:var(--onair)!important;}
@@ -71,7 +81,12 @@
 <div class="wrap">
   <div class="navbar" id="nav"></div>
 
-  <div class="eyebrow">実験中の機能</div>
+  <div class="appbar">
+    <div class="appbar-icon" style="padding:0;overflow:hidden;">
+      <img src="images/nav/radio.png" alt="パンダのアイコン" style="width:100%;height:100%;object-fit:cover;">
+    </div>
+    <div class="appbar-title">深夜ラジオ</div>
+  </div>
   <h1>あなただけの深夜ラジオ</h1>
   <p class="sub">今日の記録をもとに、2人のDJがあなたの話で盛り上がっています</p>
 
@@ -86,7 +101,7 @@
         <span class="text-secondary small font-monospace">FM 89.7 深夜ラジオ</span>
       </div>
 
-      <div class="stage mb-3">
+      <div class="stage mb-3" id="stage">
         <div class="dj-row">
           <div class="dj-chip a">
             <img class="dj-avatar-img face-right" src="images/zundamon.png" alt="DJ A">
@@ -119,6 +134,9 @@
       <audio id="player" controls class="w-100 mb-3"></audio>
 
       <button class="btn btn-radio w-100 fw-bold" id="listen-btn" style="display:none;">今日のラジオを聴く</button>
+      <div id="generating-stage" style="display:none;text-align:center;padding:10px 0;">
+        <img src="images/friends-stage.png" alt="生成中" style="width:100%;max-width:320px;">
+      </div>
       <p id="cta-message" class="text-secondary small mt-2 mb-0"></p>
     </div>
   </div>
@@ -154,6 +172,7 @@ renderNav("radio");
 
 const listenBtn = document.getElementById("listen-btn");
 const ctaMessage = document.getElementById("cta-message");
+const generatingStage = document.getElementById("generating-stage");
 const playerArea = document.getElementById("player-area");
 const player = document.getElementById("player");
 const downloadLink = document.getElementById("download-link");
@@ -169,6 +188,7 @@ const onairEl = document.getElementById("onair");
 const onairLabel = document.getElementById("onair-label");
 const waveEl = document.getElementById("wave");
 const talkBubblesEl = document.getElementById("talk-bubbles");
+const stageEl = document.getElementById("stage");
 
 function setOnAir(live, label) {
   onairEl.classList.toggle("live", live);
@@ -178,16 +198,19 @@ function setOnAir(live, label) {
 player.addEventListener("play", () => {
   waveEl.classList.add("playing");
   talkBubblesEl.classList.add("active");
+  stageEl.classList.add("talking");
   setOnAir(true, "ON AIR");
 });
 player.addEventListener("pause", () => {
   waveEl.classList.remove("playing");
   talkBubblesEl.classList.remove("active");
+  stageEl.classList.remove("talking");
   setOnAir(false, "STANDBY");
 });
 player.addEventListener("ended", () => {
   waveEl.classList.remove("playing");
   talkBubblesEl.classList.remove("active");
+  stageEl.classList.remove("talking");
   setOnAir(false, "STANDBY");
   hasPlayedOnce = true;
   renderCta();
@@ -241,9 +264,11 @@ function renderCta() {
 
   if (currentStatus.generating) {
     listenBtn.style.display = "none";
+    generatingStage.style.display = "block";
     ctaMessage.textContent = "生成中です。1〜2分ほどかかります...";
     return;
   }
+  generatingStage.style.display = "none";
 
   if (!hasEpisodeToday) {
     listenBtn.style.display = "none";
