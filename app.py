@@ -363,6 +363,7 @@ def rating():
     """
     user_id = session["user_id"]
     value = user_ratings_repository.get(user_id)
+    previous = user_ratings_repository.get_previous(user_id)
     rank, total = user_ratings_repository.get_rank(user_id)
     return jsonify({
         "rating": value,
@@ -370,6 +371,7 @@ def rating():
         "color_label": user_ratings_repository.rating_label(value),
         "rank": rank,
         "total": total,
+        "delta": round(value) - round(previous) if previous is not None else None,
     })
 
 
@@ -425,7 +427,7 @@ def update_ratings():
     for user_id, performance in performances.items():
         old_rating = user_ratings_repository.get(user_id)
         new_rating = old_rating + K * (performance * 100 - 50) / 50
-        user_ratings_repository.update(user_id, new_rating)
+        user_ratings_repository.update(user_id, new_rating, previous_rating=old_rating)
         updated.append(user_id)
 
     return jsonify({"status": "ok", "updated_users": len(updated)})
@@ -439,6 +441,24 @@ def suggestions_latest():
     if suggestion is None:
         return jsonify({"error": "まだ提案がありません"}), 404
     return jsonify(suggestion)
+
+
+@app.route("/suggestions/history", methods=["GET"])
+@require_login_api
+def suggestions_history():
+    """過去に検索した提案の一覧を、新しい順に返す(レシピ画面での振り返り用)。"""
+    user_id = session["user_id"]
+    history = suggestion_history_repository.get_all(user_id)
+    history.sort(key=lambda h: h["created_at"], reverse=True)
+    return jsonify([
+        {
+            "dish_name": h["dish_name"],
+            "ingredients": h["ingredients"],
+            "steps": h["steps"],
+            "created_at": h["created_at"],
+        }
+        for h in history[:20]
+    ])
 
 
 # ---------------------------------------------------------------------------

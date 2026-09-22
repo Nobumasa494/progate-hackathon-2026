@@ -22,7 +22,8 @@
   .to-kcal{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;color:var(--primary);}
   .ingredient-list li{margin-bottom:4px;}
 
-  .header-area{position:relative;padding-right:98px;min-height:110px;}
+  .header-area{position:relative;padding-right:98px;min-height:110px;background:rgba(255,255,255,0.7);border-radius:16px;padding-top:10px;padding-bottom:10px;}
+  .header-area h1, .header-area p{padding-left:12px;}
   .mascot-fox{
     position:absolute;right:0;top:-4px;width:92px;height:auto;
     animation:mascot-float 3.2s ease-in-out infinite;
@@ -64,6 +65,8 @@
   </div>
 
   <div id="result"></div>
+
+  <div id="history-area"></div>
 </div>
 
 <div class="navbar" id="nav"></div>
@@ -172,6 +175,7 @@ async function suggest() {
     if (!res.ok) throw new Error("failed");
     const data = await res.json();
     renderCard(data);
+    loadHistory();
   } catch (e) {
     result.innerHTML = `<p class="error">エラーが発生しました。もう一度試してください。</p>`;
   } finally {
@@ -179,8 +183,56 @@ async function suggest() {
   }
 }
 
+function formatDate(iso) {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+async function loadHistory() {
+  const historyArea = document.getElementById("history-area");
+  try {
+    const res = await fetch("/suggestions/history");
+    if (!res.ok) return;
+    const items = await res.json();
+    if (items.length === 0) {
+      historyArea.innerHTML = "";
+      return;
+    }
+
+    const card = el("div", { className: "card" });
+    card.appendChild(el("h3", { className: "sec", text: "過去の提案", style: "margin-top:0;" }));
+
+    items.forEach((item) => {
+      const details = document.createElement("details");
+      details.style.marginBottom = "10px";
+      const summary = document.createElement("summary");
+      summary.style.cursor = "pointer";
+      summary.style.fontWeight = "700";
+      summary.textContent = `${item.dish_name}(${formatDate(item.created_at)})`;
+      details.appendChild(summary);
+
+      const ul = el("ul", { className: "ingredient-list", style: "margin-top:8px;" });
+      item.ingredients.forEach((i) => ul.appendChild(el("li", { text: `${i.name} ${i.amount}` })));
+      details.appendChild(ul);
+
+      const ol = document.createElement("ol");
+      item.steps.forEach((s) => ol.appendChild(el("li", { text: s })));
+      details.appendChild(ol);
+
+      card.appendChild(details);
+    });
+
+    historyArea.innerHTML = "";
+    historyArea.appendChild(card);
+  } catch (e) {
+    // 履歴が取れなくても検索自体は使えるようにする(致命的エラーにしない)
+  }
+}
+
 button.addEventListener("click", suggest);
 input.addEventListener("keydown", (e) => { if (e.key === "Enter") suggest(); });
+
+loadHistory();
 </script>
 </body>
 </html>

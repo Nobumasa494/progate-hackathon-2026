@@ -306,9 +306,10 @@ def _generate_todays_episode(user_id: str) -> dict:
     recent_scripts = radio_episode_repository.fetch_recent_scripts(user_id, limit=2)
     memories = radio_memory_repository.fetch_top_memories(user_id, limit=3)
     diary_note = profile.get("pending_diary_note", "")
+    nickname = profile.get("nickname") or "本人"
 
     user_prompt = radio_prompt.build_user_prompt(
-        events_text, favorite_things, recent_scripts, memories, diary_note, interests
+        events_text, favorite_things, recent_scripts, memories, diary_note, interests, nickname
     )
 
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])

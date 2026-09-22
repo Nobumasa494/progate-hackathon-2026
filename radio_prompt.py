@@ -82,6 +82,7 @@ def build_user_prompt(
     memories: list[str] | None = None,
     diary_note: str = "",
     interests: str = "",
+    nickname: str = "本人",
 ) -> str:
     """実データから、OpenAIに渡すUSER_PROMPTを組み立てる。
 
@@ -93,8 +94,11 @@ def build_user_prompt(
     interests        : プロフィール画面で設定する「興味があること」(空文字もありうる)。
                         favorite_thingsと同じく、呼び出し側(radio_service.py)で
                         頻度を間引いてから渡される想定。
+    nickname         : プロフィール画面で設定するニックネーム。未設定なら"本人"のまま
+                        (SYSTEM_PROMPT側の表記と合わせている)。DJが台本内で本人を
+                        呼ぶときの呼び方として使われる。
     """
-    parts = [f"今日の出来事:\n{events_text}"]
+    parts = [f"今日の出来事:\n{events_text}", f"本人の呼び方: 「{nickname}」(「さん」を付けて呼ぶなど、自然な形でこの呼び方を使うこと)"]
 
     if favorite_things:
         parts.append(f"本人の好きなこと:\n- {favorite_things}")
