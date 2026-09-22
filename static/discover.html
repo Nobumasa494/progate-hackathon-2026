@@ -21,8 +21,10 @@
 <div class="wrap">
   <div class="navbar" id="nav"></div>
 
-  <h1>みんなのラジオ</h1>
-  <p class="sub">みんなが「共有する」を選んだ回が、匿名で流れてきます(投稿者は分かりません)</p>
+  <div style="background:rgba(255,255,255,0.7);border-radius:16px;padding:10px 12px;margin-bottom:14px;">
+    <h1 style="margin-bottom:6px;">みんなのラジオ</h1>
+    <p class="sub" style="margin-bottom:0;">みんなが「共有する」を選んだ回が、匿名で流れてきます(投稿者は分かりません)</p>
+  </div>
 
   <div id="swipe-tip" class="card border-0 bg-light mb-3" style="display:none;">
     <div class="card-body py-2 swipe-hint">
@@ -32,8 +34,8 @@
   </div>
 
   <div id="feed"></div>
-  <p id="loading" class="text-secondary small text-center py-3">読み込み中...</p>
-  <p id="no-more" class="text-secondary small text-center py-3" style="display:none;">これ以上ありません</p>
+  <p id="loading" class="text-secondary small text-center py-3" style="background:rgba(255,255,255,0.7);border-radius:12px;">読み込み中...</p>
+  <p id="no-more" class="text-secondary small text-center py-3" style="display:none;background:rgba(255,255,255,0.7);border-radius:12px;">これ以上ありません</p>
 </div>
 
 <script src="nav.js"></script>

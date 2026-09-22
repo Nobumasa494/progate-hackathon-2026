@@ -74,13 +74,15 @@ async function load() {
       return;
     }
 
+    const MEDALS = ["🥇", "🥈", "🥉"];
     entries.forEach((e, i) => {
       const row = el("div", { className: `rank-row${e.is_me ? " is-me" : ""}` });
-      row.appendChild(el("div", { className: "rank-number", text: `${i + 1}` }));
+      const rankText = MEDALS[i] || `${i + 1}`;
+      row.appendChild(el("div", { className: "rank-number", text: rankText }));
 
       const nameWrap = el("div", { className: "rank-nickname" });
       nameWrap.appendChild(el("span", { className: "rank-dot", style: `background:${RATING_HEX[e.color]};` }));
-      nameWrap.appendChild(document.createTextNode(`${e.nickname}${e.is_me ? "(あなた)" : ""} [${e.color_label}]${e.rating}`));
+      nameWrap.appendChild(document.createTextNode(`${e.nickname}${e.is_me ? "(あなた)" : ""} ${e.rating}`));
       row.appendChild(nameWrap);
 
       row.appendChild(el("div", { className: "rank-badges", text: e.badges > 0 ? `🏆×${e.badges}` : "" }));

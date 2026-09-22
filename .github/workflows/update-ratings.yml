@@ -1,8 +1,8 @@
-name: Weekly Rating Update
+name: Daily Rating Update
 
 on:
   schedule:
-    - cron: "0 0 * * 1" # 毎週月曜0時(UTC)
+    - cron: "0 0 * * *" # 毎日0時(UTC)
   workflow_dispatch: # 手動で試し実行したいときのためのボタン
 
 jobs:

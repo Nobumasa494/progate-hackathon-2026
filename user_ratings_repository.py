@@ -1,9 +1,10 @@
 """user_ratingsテーブル(Supabase/Postgres)へ接続し、レーティングのCRUDを行う。
 
 【Supabase上の user_ratings テーブル構成】
-    user_id    : uuid (PK)
-    rating     : float8 (現在のレーティング)
-    updated_at : timestamptz (自動記録)
+    user_id         : uuid (PK)
+    rating          : float8 (現在のレーティング)
+    previous_rating : float8 (1回前の更新時点でのレーティング。増減表示用、任意)
+    updated_at      : timestamptz (自動記録)
 
 did_replace成功率のみで計算する(クイズの正誤は含めない。design.md参照)。
 
@@ -91,13 +92,37 @@ def get_all(client: Optional[Client] = None) -> list[dict]:
     return response.data
 
 
-def update(user_id: str, new_rating: float, client: Optional[Client] = None) -> None:
-    """レーティングを更新する(無ければ新規作成、あれば上書き)。"""
+def get_previous(user_id: str, client: Optional[Client] = None) -> Optional[float]:
+    """前回の更新前のレーティングを返す(記録が無ければNone。画面での増減表示用)。"""
     client = client or get_client()
-    client.table("user_ratings").upsert({
-        "user_id": user_id,
-        "rating": new_rating,
-    }).execute()
+    response = (
+        client.table("user_ratings")
+        .select("previous_rating")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    rows = response.data
+    if not rows or rows[0]["previous_rating"] is None:
+        return None
+    return float(rows[0]["previous_rating"])
+
+
+def update(
+    user_id: str,
+    new_rating: float,
+    previous_rating: Optional[float] = None,
+    client: Optional[Client] = None,
+) -> None:
+    """レーティングを更新する(無ければ新規作成、あれば上書き)。
+
+    previous_ratingには、更新前の値(呼び出し側が更新直前に取得したget()の値)を渡す。
+    これを一緒に保存しておくことで、画面側で前回からの増減(例: +15)を表示できる。
+    """
+    client = client or get_client()
+    data = {"user_id": user_id, "rating": new_rating}
+    if previous_rating is not None:
+        data["previous_rating"] = previous_rating
+    client.table("user_ratings").upsert(data).execute()
 
 
 RATING_LABELS = {

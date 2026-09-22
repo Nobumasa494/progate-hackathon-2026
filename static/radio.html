@@ -87,8 +87,10 @@
     </div>
     <div class="appbar-title">深夜ラジオ</div>
   </div>
-  <h1>あなただけの深夜ラジオ</h1>
-  <p class="sub">今日の記録をもとに、2人のDJがあなたの話で盛り上がっています</p>
+  <div style="background:rgba(255,255,255,0.7);border-radius:16px;padding:10px 12px;margin-bottom:14px;">
+    <h1 style="margin-bottom:6px;">あなただけの深夜ラジオ</h1>
+    <p class="sub" style="margin-bottom:0;">今日の記録をもとに、2人のDJがあなたの話で盛り上がっています</p>
+  </div>
 
   <a href="/discover" class="btn btn-ghost" style="width:100%;display:block;text-align:center;text-decoration:none;margin-bottom:16px;">みんなのエピソードを見る ›</a>
 
@@ -315,8 +317,22 @@ async function pollStatus() {
   renderCta();
 }
 
+// ニックネームを設定済みなら、共有時の表示名欄に自動で入れておく
+// (わざわざ入力し直さなくていいように。空欄のままにすれば匿名で共有できる)
+async function prefillShareName() {
+  try {
+    const res = await fetch("/profile/data");
+    if (!res.ok) return;
+    const profile = await res.json();
+    if (profile.nickname) shareNameInput.value = profile.nickname;
+  } catch (e) {
+    // 取れなくても共有機能自体は手入力で使えるので、致命的エラーにしない
+  }
+}
+
 loadLatest();
 pollStatus();
+prefillShareName();
 setInterval(pollStatus, 5000);
 </script>
 </body>

@@ -28,14 +28,34 @@
   .quiz-card{background:var(--surface-2);border-radius:16px;padding:16px 20px;margin-bottom:16px;}
   .quiz-question{font-weight:700;font-size:14px;margin-bottom:12px;}
   .quiz-choice{display:block;width:100%;text-align:left;padding:10px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);margin-bottom:8px;cursor:pointer;font-size:13px;}
-  .quiz-choice.correct{background:var(--primary-bg);border-color:var(--primary);}
-  .quiz-choice.wrong{background:var(--warn-bg);border-color:var(--warn);}
+  .quiz-choice.correct{background:#e0faec;border-color:#22c55e;border-width:2px;box-shadow:0 0 0 3px rgba(34,197,94,0.25);animation:quiz-correct-pop 0.6s cubic-bezier(.34,1.6,.64,1);}
+  .quiz-choice.correct::after{content:" ✓";font-weight:800;color:#16a34a;}
+  .quiz-choice.wrong{background:var(--warn-bg);border-color:var(--warn);animation:quiz-wrong-shake 0.4s ease;}
+  @keyframes quiz-correct-pop{
+    0%{transform:scale(1);}
+    30%{transform:scale(1.12);}
+    55%{transform:scale(0.96);}
+    80%{transform:scale(1.03);}
+    100%{transform:scale(1);}
+  }
+  @keyframes quiz-wrong-shake{
+    0%,100%{transform:translateX(0);}
+    25%{transform:translateX(-4px);}
+    75%{transform:translateX(4px);}
+  }
+  .quiz-result.show-correct{animation:quiz-result-pop 0.5s cubic-bezier(.34,1.6,.64,1);color:#16a34a;font-size:16px;}
+  @keyframes quiz-result-pop{
+    0%{transform:scale(0.4);opacity:0;}
+    70%{transform:scale(1.1);opacity:1;}
+    100%{transform:scale(1);}
+  }
   .quiz-result{font-size:13px;font-weight:700;margin-top:8px;}
   .rating-legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--ink-dim);margin-bottom:16px;}
   .rating-legend span{display:inline-flex;align-items:center;gap:3px;}
   .rating-legend .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
 
-  .header-area{position:relative;padding-right:98px;min-height:100px;}
+  .header-area{position:relative;padding-right:98px;min-height:100px;background:rgba(255,255,255,0.7);border-radius:16px;padding-top:10px;padding-bottom:10px;margin-bottom:14px;}
+  .header-area h1, .header-area p{padding-left:12px;}
   .mascot-panda{
     position:absolute;right:-10px;top:-4px;width:92px;height:auto;
     animation:mascot-float 3.2s ease-in-out infinite;
@@ -131,10 +151,11 @@ async function loadRating() {
     if (!res.ok) return;
     const data = await res.json();
     document.getElementById("rating-badge").innerHTML = "";
+    const deltaText = data.delta === null ? "" : data.delta > 0 ? ` (▲+${data.delta})` : data.delta < 0 ? ` (▼${data.delta})` : " (→±0)";
     const badge = el("a", {
       className: `rating-badge rating-${data.color}`,
       href: "/leaderboard",
-      text: `レーティング ${Math.round(data.rating)}[${data.color_label}](🏆 ${data.rank}位 / ${data.total}人中) ›`,
+      text: `レーティング ${Math.round(data.rating)}${deltaText} (🏆 ${data.rank}位 / ${data.total}人中) ›`,
     });
     document.getElementById("rating-badge").appendChild(badge);
   } catch (e) {
@@ -158,7 +179,8 @@ function renderQuiz(suggestion) {
       card.querySelectorAll(".quiz-choice").forEach(b => b.disabled = true);
       const isCorrect = choice === suggestion.trivia_answer;
       btn.classList.add(isCorrect ? "correct" : "wrong");
-      resultEl.textContent = isCorrect ? "正解!" : `不正解。正解は「${suggestion.trivia_answer}」`;
+      resultEl.textContent = isCorrect ? "🎉 正解!" : `不正解。正解は「${suggestion.trivia_answer}」`;
+      if (isCorrect) resultEl.classList.add("show-correct");
 
       await fetch("/quiz/answer", {
         method: "POST",
