@@ -4,6 +4,7 @@
     id          : int8 (PK, 自動採番)
     user_id     : uuid
     dish_name   : text (検索された元の料理名)
+    replacement_name : text (AIが提案した置き換え後の料理名、任意)
     ingredients : jsonb (提案された材料)
     steps       : jsonb (提案された手順)
     embedding   : jsonb (提案全体をEmbeddings化したベクトル、float配列)
@@ -63,6 +64,7 @@ def save(
     steps: list[str],
     embedding: list[float],
     dish_name_embedding: list[float],
+    replacement_name: Optional[str] = None,
     client: Optional[Client] = None,
 ) -> None:
     """提案を1件保存する。記録(meal_logs)の有無に関係なく、生成のたびに呼ぶ。
@@ -71,6 +73,7 @@ def save(
     dish_name_embedding: 料理名だけのベクトル。検索時のクエリ(料理名)と
         同じ「形」同士で比較しないと類似度が信頼できないと実データで判明した
         ため、検索(RAG)にはこちらを使う。
+    replacement_name: AIが提案した置き換え後の料理名(画面での振り返り表示用)。
     """
     client = client or get_client()
     client.table("suggestion_history").insert({
@@ -80,6 +83,7 @@ def save(
         "steps": steps,
         "embedding": embedding,
         "dish_name_embedding": dish_name_embedding,
+        "replacement_name": replacement_name,
     }).execute()
 
 

@@ -208,7 +208,8 @@ async function loadHistory() {
       const summary = document.createElement("summary");
       summary.style.cursor = "pointer";
       summary.style.fontWeight = "700";
-      summary.textContent = `${item.dish_name}(${formatDate(item.created_at)})`;
+      const arrowText = item.replacement_name ? ` → ${item.replacement_name}` : "";
+      summary.textContent = `${item.dish_name}${arrowText}(${formatDate(item.created_at)})`;
       details.appendChild(summary);
 
       const ul = el("ul", { className: "ingredient-list", style: "margin-top:8px;" });

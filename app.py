@@ -267,7 +267,7 @@ def suggest():
     # 今回の提案を履歴に保存する(/recordで記録したかどうかに関係なく)
     suggestion_history_repository.save(
         user_id, dish_name, result["ingredients"], result["steps"],
-        result_embedding, query_embedding,
+        result_embedding, query_embedding, result["replacement_name"],
     )
 
     # 機能2が後で使えるように、最新の提案として保存しておく
@@ -453,6 +453,7 @@ def suggestions_history():
     return jsonify([
         {
             "dish_name": h["dish_name"],
+            "replacement_name": h.get("replacement_name"),
             "ingredients": h["ingredients"],
             "steps": h["steps"],
             "created_at": h["created_at"],

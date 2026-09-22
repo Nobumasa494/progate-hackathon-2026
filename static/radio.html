@@ -106,9 +106,9 @@
       <div class="stage mb-3" id="stage">
         <div class="dj-row">
           <div class="dj-chip a">
-            <img class="dj-avatar-img face-right" src="images/zundamon.png" alt="DJ A">
+            <img class="dj-avatar-img face-right" id="dj-a-img" src="images/zundamon.png" alt="DJ A">
             <div class="dj-ground"></div>
-            <span class="badge rounded-pill text-bg-light border">DJ A</span>
+            <span class="badge rounded-pill text-bg-light border" id="dj-a-name">DJ A</span>
           </div>
 
           <div class="talk-bubbles" id="talk-bubbles">
@@ -120,9 +120,9 @@
           </div>
 
           <div class="dj-chip b">
-            <img class="dj-avatar-img" src="images/metan.png" alt="DJ B">
+            <img class="dj-avatar-img" id="dj-b-img" src="images/metan.png" alt="DJ B">
             <div class="dj-ground"></div>
-            <span class="badge rounded-pill text-bg-light border">DJ B</span>
+            <span class="badge rounded-pill text-bg-light border" id="dj-b-name">DJ B</span>
           </div>
         </div>
         <div class="stage-floor"></div>
@@ -330,9 +330,61 @@ async function prefillShareName() {
   }
 }
 
+// キャラクター名 → 立ち絵画像。素材が無いキャラはデフォルト画像のまま表示する
+// (VOICEVOXの話者は種類が多く、全員分の絵を今は用意できていないため)。
+const DJ_IMAGES = {
+  "ずんだもん": "images/zundamon.png",
+  "四国めたん": "images/metan.png",
+  "春日部つむぎ": "images/tsumugi.png",
+  "雨晴はう": "images/hau.png",
+  "波音リツ": "images/ritsu.png",
+};
+
+// 設定画面で選んだDJのキャラクター名を、「DJ A」「DJ B」の代わりに表示する。
+// 話者一覧(/radio/voices)はVOICEVOXの起動待ちで時間がかかることがあるため、
+// profile.htmlのpollVoicesと同じ考え方で、届くまで少し待ってから反映する。
+async function loadDjNames(attempt = 0) {
+  try {
+    const profileRes = await fetch("/profile/data");
+    if (!profileRes.ok) return;
+    const profile = await profileRes.json();
+
+    const voicesRes = await fetch("/radio/voices");
+    const status = await voicesRes.json();
+    if (status.status !== "ready") {
+      // VOICEVOXが起動待ちのことがあるため、少しだけ待って再試行する(最大3回)
+      if (attempt < 3) setTimeout(() => loadDjNames(attempt + 1), 5000);
+      return;
+    }
+
+    const findName = (styleId) => {
+      for (const speaker of status.speakers) {
+        for (const style of speaker.styles) {
+          if (style.id === styleId) return speaker.name;
+        }
+      }
+      return null;
+    };
+
+    const nameA = findName(profile.voice_a_id);
+    const nameB = findName(profile.voice_b_id);
+    if (nameA) {
+      document.getElementById("dj-a-name").textContent = nameA;
+      if (DJ_IMAGES[nameA]) document.getElementById("dj-a-img").src = DJ_IMAGES[nameA];
+    }
+    if (nameB) {
+      document.getElementById("dj-b-name").textContent = nameB;
+      if (DJ_IMAGES[nameB]) document.getElementById("dj-b-img").src = DJ_IMAGES[nameB];
+    }
+  } catch (e) {
+    // 取れなくても再生自体はできるので、致命的エラーにしない(「DJ A」「DJ B」のまま表示)
+  }
+}
+
 loadLatest();
 pollStatus();
 prefillShareName();
+loadDjNames();
 setInterval(pollStatus, 5000);
 </script>
 </body>
