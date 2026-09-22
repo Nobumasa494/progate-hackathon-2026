@@ -73,6 +73,10 @@
 <script>
 renderNav("goal");
 
+function fmt(n) {
+  return Math.round(n).toLocaleString("ja-JP");
+}
+
 function ringSvg(percent) {
   const r = 46, c = 2 * Math.PI * r;
   const offset = c * (1 - percent / 100);
@@ -116,10 +120,10 @@ function renderGoal(goal) {
         ${ringSvg(0)}
         <img src="images/elephant.png" alt="ゾウのアイコン" style="width:56px;height:auto;">
       </div>
-      <div class="goalmeta">目標まであと${goal.total_remaining_kcal > 0 ? Math.round(goal.total_remaining_kcal) + "kcal" : "達成間近"}(${goal.target_weight_kg}kgまで / ${goal.target_date}まで)</div>
+      <div class="goalmeta">目標まであと${goal.total_remaining_kcal > 0 ? fmt(goal.total_remaining_kcal) + "kcal" : "達成間近"}(${goal.target_weight_kg}kgまで / ${goal.target_date}まで)</div>
       <div class="statrow2">
-        <div class="stat2"><div class="k">1日の目標削減</div><div class="v">${goal.target_daily_reduction_kcal}kcal</div></div>
-        <div class="stat2"><div class="k">ゴールまでの合計(体重ベース)</div><div class="v">${goal.total_remaining_kcal}kcal</div></div>
+        <div class="stat2"><div class="k">1日の目標削減</div><div class="v">${fmt(goal.target_daily_reduction_kcal)}kcal</div></div>
+        <div class="stat2"><div class="k">ゴールまでの合計(体重ベース)</div><div class="v">${fmt(goal.total_remaining_kcal)}kcal</div></div>
       </div>
       <div class="banner" style="${bannerStyle}">${bannerText}</div>
     </div>
@@ -133,14 +137,14 @@ function renderProgress(progress) {
   if (!area) return;
   const remainingText = progress.remaining_kcal === null
     ? "-"
-    : `${Math.round(progress.remaining_kcal)}kcal`;
+    : `${fmt(progress.remaining_kcal)}kcal`;
   area.innerHTML = `
     <div class="goalmeta">食事ログの進捗(行動ベース)</div>
     <div class="statrow2">
-      <div class="stat2"><div class="k">今の目標での削減実績</div><div class="v">${progress.current_goal_saved_kcal}kcal</div></div>
+      <div class="stat2"><div class="k">今の目標での削減実績</div><div class="v">${fmt(progress.current_goal_saved_kcal)}kcal</div></div>
       <div class="stat2"><div class="k">今の目標まであと</div><div class="v">${remainingText}</div></div>
     </div>
-    <div style="font-size:12px;color:var(--ink-dim);margin-top:12px;text-align:center;">通算(全期間)の削減実績: ${progress.all_time_saved_kcal}kcal</div>
+    <div style="font-size:12px;color:var(--ink-dim);margin-top:12px;text-align:center;">通算(全期間)の削減実績: ${fmt(progress.all_time_saved_kcal)}kcal</div>
   `;
 
   // 達成率のリングを、行動ベースの進捗(saved / (saved + remaining))で更新する
