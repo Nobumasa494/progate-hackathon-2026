@@ -132,8 +132,6 @@ ul,ol{margin:0;padding-left:20px;font-size:14px;line-height:1.9;}
 @media (min-width: 768px){
   body{
     background:
-      radial-gradient(closest-side, var(--primary-bg), transparent 70%) -10% -10%/55% 55% no-repeat,
-      radial-gradient(closest-side, var(--surface-2), transparent 70%) 110% 110%/55% 55% no-repeat,
       linear-gradient(rgba(243,248,244,0.55), rgba(243,248,244,0.55)) 0 0/auto repeat,
       url("images/bg-pattern.jpg") 0 0/320px 320px repeat,
       var(--bg);
