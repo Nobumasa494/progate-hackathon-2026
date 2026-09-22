@@ -31,8 +31,12 @@
 
 *{box-sizing:border-box;}
 body{
-  margin:0;background:var(--bg);color:var(--ink);
+  margin:0;color:var(--ink);
   font-family:'Zen Kaku Gothic New',sans-serif;
+  background-color:var(--bg);
+  background-image:linear-gradient(rgba(243,248,244,0.85), rgba(243,248,244,0.85)), url("images/bg-pattern.jpg");
+  background-repeat:repeat;
+  background-size:auto, 320px 320px;
 }
 a{color:var(--primary);}
 .wrap{max-width:480px;margin:0 auto;padding:20px 18px 100px;}

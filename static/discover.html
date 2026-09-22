@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>みんなのラジオ(実験中) - 置き換えダイエット</title>
+<title>みんなのラジオ - 置き換えダイエット</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/png" href="images/app-icon.png">
+<link rel="apple-touch-icon" href="images/app-icon.png">
 <style>
   body{font-family:'Zen Kaku Gothic New',sans-serif;}
   .swipe-card{touch-action:pan-y;position:relative;}
@@ -19,7 +21,6 @@
 <div class="wrap">
   <div class="navbar" id="nav"></div>
 
-  <div class="eyebrow">実験中の機能</div>
   <h1>みんなのラジオ</h1>
   <p class="sub">みんなが「共有する」を選んだ回が、匿名で流れてきます(投稿者は分かりません)</p>
 
@@ -48,6 +49,23 @@ let cursor = null;
 let loading = false;
 let done = false;
 let currentlyPlaying = null;
+
+// 上から順番に自動再生していくための、再生済み順のリスト
+const episodeAudios = [];
+
+function playNext(finishedAudio) {
+  const idx = episodeAudios.indexOf(finishedAudio);
+  const next = episodeAudios[idx + 1];
+  if (next) {
+    next.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (currentlyPlaying && currentlyPlaying !== next) currentlyPlaying.pause();
+    next.play().catch(() => {});
+    currentlyPlaying = next;
+  } else if (!done) {
+    // まだ次が読み込まれていない場合は、読み込んでから改めて次に進む
+    loadMore().then(() => playNext(finishedAudio));
+  }
+}
 
 // 「消す」はサーバーには送らず、このブラウザだけで覚えておく(他の人には見え続ける)。
 const DISMISSED_KEY = "discover_dismissed_episode_ids";
@@ -84,28 +102,6 @@ document.getElementById("swipe-tip-close").addEventListener("click", () => {
   try { localStorage.setItem("discover_swipe_tip_seen", "1"); } catch (e) {}
 });
 
-// 画面に映っている音声を自動再生し、画面から外れたら止める(ショート動画のような挙動)。
-// ブラウザによっては、ユーザーが一度もクリックしていないと自動再生がブロックされることがある。
-// その場合は再生ボタンを手動で押せば聴ける(controlsは残してあるので手動操作も可能)。
-const autoplayObserver = new IntersectionObserver(
-  (entries) => {
-    entries.forEach((entry) => {
-      const audio = entry.target;
-      if (entry.isIntersecting) {
-        if (currentlyPlaying && currentlyPlaying !== audio) {
-          currentlyPlaying.pause();
-        }
-        audio.play().catch(() => {});
-        currentlyPlaying = audio;
-      } else {
-        audio.pause();
-        if (currentlyPlaying === audio) currentlyPlaying = null;
-      }
-    });
-  },
-  { threshold: 0.6 }
-);
-
 // カードを左右にドラッグし、一定距離を超えたら「消す」扱いにする(スワイプ操作)。
 // audio(再生バーの操作)・details(台本の開閉)の上から始まったドラッグは無視する。
 function attachSwipeToDismiss(card, audio, episodeId) {
@@ -137,9 +133,12 @@ function attachSwipeToDismiss(card, audio, episodeId) {
       const dir = dx > 0 ? 1 : -1;
       card.style.transform = `translateX(${dir * 600}px)`;
       card.style.opacity = "0";
+      const wasPlaying = currentlyPlaying === audio;
       audio.pause();
-      if (currentlyPlaying === audio) currentlyPlaying = null;
-      autoplayObserver.unobserve(audio);
+      if (wasPlaying) currentlyPlaying = null;
+      if (wasPlaying) playNext(audio); // 再生中の回を消したら、続けて次の回に進む
+      const idx = episodeAudios.indexOf(audio);
+      if (idx !== -1) episodeAudios.splice(idx, 1);
       dismissEpisode(episodeId);
       setTimeout(() => card.remove(), 200);
     } else {
@@ -199,8 +198,16 @@ function renderEpisode(ep) {
   body.appendChild(details);
   card.appendChild(body);
   feedEl.appendChild(card);
-  autoplayObserver.observe(audio);
   attachSwipeToDismiss(card, audio, ep.id);
+  episodeAudios.push(audio);
+  audio.addEventListener("ended", () => playNext(audio));
+
+  // 一番最初の1件だけ、読み込み時に自動再生を試みる(以降はplayNextで順送り)。
+  // ブラウザの自動再生ポリシーにより、ユーザー操作前だとブロックされることがある
+  // (その場合はcatchで静かに諦め、再生ボタンでの手動再生に任せる)。
+  if (episodeAudios.length === 1) {
+    audio.play().then(() => { currentlyPlaying = audio; }).catch(() => {});
+  }
 }
 
 async function loadMore() {
