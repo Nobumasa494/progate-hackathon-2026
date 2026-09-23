@@ -77,17 +77,6 @@ def _build_events_text(user_id: str) -> str:
     return "\n".join(lines)
 
 
-def _calculate_streak(user_id: str) -> int:
-    """直近のログから、最新を起点に連続で置き換え(did_replace=True)している件数を数える。"""
-    logs = meal_logs_repository.fetch_logs(user_id, limit=30)
-    streak = 0
-    for log in logs:
-        if not log["did_replace"]:
-            break
-        streak += 1
-    return streak
-
-
 def _ask_dj_reaction(fact_description: str) -> str:
     """自己ベスト更新などの事実に対する、DJの一言の反応をAIに書かせる(1回だけ)。"""
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -120,11 +109,12 @@ def _check_and_save_milestones(user_id: str, profile: dict) -> None:
     """
     updates: dict = {}
 
-    streak = _calculate_streak(user_id)
-    best_streak = profile.get("best_streak", 0)
-    if streak >= 2 and streak > best_streak:
-        _save_milestone(user_id, f"連勝記録を更新した(今までの最高{best_streak}回→今回{streak}回)")
-        updates["best_streak"] = streak
+    replace_dates = meal_logs_repository.fetch_replace_dates(user_id)
+    streak_days = meal_logs_repository.calculate_streak_days(replace_dates)
+    best_streak_days = profile.get("best_streak_days", 0)
+    if streak_days >= 2 and streak_days > best_streak_days:
+        _save_milestone(user_id, f"連続記録日数を更新した(今までの最高{best_streak_days}日→今回{streak_days}日)")
+        updates["best_streak_days"] = streak_days
 
     latest_weight = weight_repository.get_latest_weight(user_id)
     best_weight = profile.get("best_weight")
