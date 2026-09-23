@@ -11,6 +11,14 @@
 <link rel="icon" type="image/png" href="images/app-icon.png">
 <link rel="apple-touch-icon" href="images/app-icon.png">
 <style>
+  /* この画面だけ、背景をイラストに差し替える */
+  body{
+    background-image:linear-gradient(rgba(243,248,244,0.55), rgba(243,248,244,0.55)), url("images/radio-bg.jpg");
+    background-repeat:no-repeat;
+    background-size:auto, cover;
+    background-position:center, center;
+    background-attachment:fixed, fixed;
+  }
   :root{
     --radioA: oklch(52% 0.14 300); --radioA-bg: oklch(93% 0.05 300);
     --radioB: oklch(52% 0.14 350); --radioB-bg: oklch(93% 0.05 350);

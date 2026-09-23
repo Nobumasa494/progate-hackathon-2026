@@ -63,7 +63,7 @@ a{color:var(--primary);}
 h1{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:22px;margin:0 0 8px;}
 .sub{color:var(--ink-dim);font-size:13px;margin:0 0 22px;}
 
-.card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px 22px;margin-bottom:16px;box-shadow:0 2px 10px rgba(115,87,196,0.05);}
+.card{background:rgba(255,255,255,0.85);border:1px solid var(--border);border-radius:20px;padding:22px 22px;margin-bottom:16px;box-shadow:0 2px 10px rgba(115,87,196,0.05);}
 .inputrow{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
 .input{flex:1;min-width:140px;box-sizing:border-box;padding:14px 18px;border:1.5px solid var(--border);border-radius:999px;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;background:var(--surface-2);color:var(--ink);}
 .btn{border:none;border-radius:14px;padding:15px 22px;font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:14px;cursor:pointer;background:var(--primary);color:#fff;}

@@ -11,6 +11,14 @@
 <link rel="icon" type="image/png" href="images/app-icon.png">
 <link rel="apple-touch-icon" href="images/app-icon.png">
 <style>
+  /* この画面だけ、背景をイラストに差し替える(オーバーレイなし、画像そのまま) */
+  body{
+    background-image:url("images/profile-bg.jpg");
+    background-repeat:no-repeat;
+    background-size:cover;
+    background-position:center;
+    background-attachment:fixed;
+  }
   .label{font-size:13px;color:var(--ink-dim);margin-bottom:10px;font-weight:700;}
   select.input{width:100%;margin-bottom:14px;}
 </style>

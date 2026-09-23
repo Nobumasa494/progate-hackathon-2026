@@ -11,6 +11,14 @@
 <link rel="icon" type="image/png" href="images/app-icon.png">
 <link rel="apple-touch-icon" href="images/app-icon.png">
 <style>
+  /* この画面だけ、背景をイラストに差し替える */
+  body{
+    background-image:linear-gradient(rgba(243,248,244,0.55), rgba(243,248,244,0.55)), url("images/recipe-bg.jpg");
+    background-repeat:no-repeat;
+    background-size:auto, cover;
+    background-position:center, center;
+    background-attachment:fixed, fixed;
+  }
   .search-row{display:flex;gap:8px;margin-bottom:18px;}
   .search-row .input{padding-left:20px;}
   .search-btn{width:48px;height:48px;flex:0 0 auto;border-radius:50%;background:var(--ai-gradient);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 16px -6px rgba(115,87,196,0.6);}
@@ -153,7 +161,7 @@ function renderCard(data) {
   result.appendChild(cta);
 
   const hint = el("p", { className: "sub", text: "保存すると、食事ログ画面から実際に食べたかどうかを記録できます。" });
-  hint.style.textAlign = "center"; hint.style.marginTop = "10px";
+  hint.style.cssText = "text-align:center;margin:10px 0 0;padding:8px 12px;background:rgba(255,255,255,0.7);border-radius:12px;";
   result.appendChild(hint);
 }
 

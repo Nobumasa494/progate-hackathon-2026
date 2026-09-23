@@ -11,6 +11,14 @@
 <link rel="icon" type="image/png" href="images/app-icon.png">
 <link rel="apple-touch-icon" href="images/app-icon.png">
 <style>
+  /* この画面だけ、背景をイラストに差し替える */
+  body{
+    background-image:linear-gradient(rgba(243,248,244,0.55), rgba(243,248,244,0.55)), url("images/goals-bg.jpg");
+    background-repeat:no-repeat;
+    background-size:auto, cover;
+    background-position:center, center;
+    background-attachment:fixed, fixed;
+  }
   .ring-wrap{display:flex;align-items:center;justify-content:center;gap:4px;margin:6px 0 18px;}
   .ring-pct{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:26px;fill:var(--primary-dark);}
   .ring-label{font-size:11px;fill:var(--ink-dim);}
@@ -149,15 +157,12 @@ function renderGoal(goal) {
 
   area.innerHTML = `
     <div class="card">
-      <div class="ring-wrap" id="ring-wrap">
-        ${ringSvg(0)}
-        <img src="images/elephant.png" alt="ゾウのアイコン" style="width:56px;height:auto;">
-      </div>
       <div class="goalmeta">目標まであと${goal.total_remaining_kcal > 0 ? fmt(goal.total_remaining_kcal) + "kcal" : "達成間近"}(${goal.target_weight_kg}kgまで / ${goal.target_date}まで)</div>
       <div class="statrow2">
         <div class="stat2"><div class="k">1日の目標削減</div><div class="v">${fmt(goal.target_daily_reduction_kcal)}kcal</div></div>
         <div class="stat2"><div class="k">ゴールまでの合計(体重ベース)</div><div class="v">${fmt(goal.total_remaining_kcal)}kcal</div></div>
       </div>
+      <div style="font-size:11px;color:var(--ink-dim);margin-top:6px;">※ 今の体重をもとに毎回計算し直しています。体重が変わるとここも変わります。</div>
       <div class="banner" style="${bannerStyle}">${bannerText}</div>
     </div>
     <div class="card" id="progress-area"><p class="loading">食事ログの進捗を読み込み中...</p></div>
@@ -172,11 +177,16 @@ function renderProgress(progress) {
     ? "-"
     : `${fmt(progress.remaining_kcal)}kcal`;
   area.innerHTML = `
+    <div class="ring-wrap" id="ring-wrap">
+      ${ringSvg(0)}
+      <img src="images/elephant.png" alt="ゾウのアイコン" style="width:56px;height:auto;">
+    </div>
     <div class="goalmeta">食事ログの進捗(行動ベース)</div>
     <div class="statrow2">
       <div class="stat2"><div class="k">今の目標での削減実績</div><div class="v">${fmt(progress.current_goal_saved_kcal)}kcal</div></div>
       <div class="stat2"><div class="k">今の目標まであと</div><div class="v">${remainingText}</div></div>
     </div>
+    <div style="font-size:11px;color:var(--ink-dim);margin-top:6px;">※ 目標を設定した時点を基準に、記録した実績だけで計算しています。</div>
     <div style="font-size:12px;color:var(--ink-dim);margin-top:12px;text-align:center;">通算(全期間)の削減実績: ${fmt(progress.all_time_saved_kcal)}kcal</div>
   `;
 
