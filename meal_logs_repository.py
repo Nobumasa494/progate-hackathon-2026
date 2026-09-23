@@ -223,6 +223,50 @@ def fetch_this_week_success_rates(client: Optional[Client] = None) -> dict[str, 
     }
 
 
+def fetch_replace_dates(user_id: str, days: int = 35, client: Optional[Client] = None) -> set[str]:
+    """直近days日分について、did_replace=Trueで記録された日付(YYYY-MM-DD)の集合を返す。
+
+    連続記録日数の計算・カレンダー表示(目標画面)に使う。_week_start()と同じく、
+    created_atの日付部分をそのまま使う(タイムゾーン変換はしない)。
+    """
+    from datetime import datetime, timedelta, timezone
+
+    client = client or get_client()
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    resp = (
+        client.table("meal_logs")
+        .select("created_at")
+        .eq("user_id", user_id)
+        .eq("did_replace", True)
+        .gte("created_at", since)
+        .execute()
+    )
+    dates = set()
+    for row in resp.data:
+        created_at = row["created_at"]
+        date_str = created_at.split("T")[0] if "T" in created_at else created_at[:10]
+        dates.add(date_str)
+    return dates
+
+
+def calculate_streak_days(dates: set[str]) -> int:
+    """置き換えた日付の集合から、今日(または昨日)を起点にした連続日数を数える。
+
+    今日はまだ記録していなくても、昨日まで続いていれば継続中として扱う
+    (今日という1日がまだ終わっていないため、記録していない=途切れた、とは判定しない)。
+    """
+    from datetime import datetime, timedelta, timezone
+
+    today = datetime.now(timezone.utc).date()
+    start = today if today.isoformat() in dates else today - timedelta(days=1)
+    streak = 0
+    cursor = start
+    while cursor.isoformat() in dates:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
+
+
 def _week_start(created_at: str) -> str:
     """created_at（ISO8601）からその週の月曜日の日付（YYYY-MM-DD）を返す。"""
     from datetime import datetime, timedelta
