@@ -85,7 +85,6 @@ const dateInput = document.getElementById("weight-date");
 const input = document.getElementById("weight-input");
 const button = document.getElementById("record-btn");
 const deleteButton = document.getElementById("delete-btn");
-const todayValueEl = document.getElementById("today-value");
 const historyEl = document.getElementById("history");
 let chart;
 
@@ -109,7 +108,6 @@ async function loadChart() {
   });
 
   if (logs.length > 0) {
-    todayValueEl.innerHTML = `${logs[logs.length - 1].weight_kg}<span>kg</span>`;
     input.value = logs[logs.length - 1].weight_kg;
   }
 
