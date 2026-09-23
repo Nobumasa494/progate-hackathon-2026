@@ -1,7 +1,7 @@
 # 「探すクエスト」機能 企画メモ
 
 検討日: 2026-09-21
-状態: 企画段階。実装は未着手。チームでの採用可否を相談したい。
+状態: チームとして採用し、実装・mainへのマージ済み。実装本体は[`discovery_repository.py`](../../discovery_repository.py)、[`static/quest.html`](../../static/quest.html)、[`app.py`](../../app.py)の`/discoveries`・`/maps-key`ルートにある。
 
 ## 背景・課題意識
 

@@ -1,11 +1,9 @@
 # 提案の多様性チェック機能
 
 検討・実装日: 2026-09-19
-状態: ①(提案の多様性チェック)②(クイズ)③(レーティング)すべて実装・動作確認済み。GitHub Actionsのワークフローファイルのみ未設置。
+状態: ①(提案の多様性チェック)②(クイズ)③(レーティング)すべて実装・動作確認済み。チームとして採用し、mainにマージ済み。GitHub Actionsのワークフローファイルのみ未設置。
 
-このフォルダには検証用スクリプトと設計資料のみを置いている。実際にアプリへ組み込んだ実装本体は、リポジトリルートの[`craving_similarity.py`](../../craving_similarity.py)・[`suggestion_history_repository.py`](../../suggestion_history_repository.py)・[`quiz_results_repository.py`](../../quiz_results_repository.py)・[`user_ratings_repository.py`](../../user_ratings_repository.py)と、[`app.py`](../../app.py)の`/suggest`・`/quiz/answer`・`/admin/update-ratings`ルート・[`recipe_service.py`](../../recipe_service.py)の`suggest_replacement()`にある。
-
-チームとしてこの機能を採用するかはまだ未合意。個人の`feature/suggestion-diversity`ブランチで実装済み。
+このフォルダには検討時点の検証用スクリプトと設計資料のみを置いている。実際にアプリへ組み込んだ実装本体は、リポジトリルートの[`craving_similarity.py`](../../craving_similarity.py)・[`suggestion_history_repository.py`](../../suggestion_history_repository.py)・[`quiz_results_repository.py`](../../quiz_results_repository.py)・[`user_ratings_repository.py`](../../user_ratings_repository.py)と、[`app.py`](../../app.py)の`/suggest`・`/quiz/answer`・`/admin/update-ratings`ルート・[`recipe_service.py`](../../recipe_service.py)の`suggest_replacement()`にある。
 
 ## 背景・動機
 
