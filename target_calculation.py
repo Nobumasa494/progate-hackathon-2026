@@ -142,6 +142,24 @@ def load_json(source: str) -> dict:
         return json.load(f)
 
 
+def calc_steps_kcal(step_count: int, weight_kg: Optional[float]) -> Optional[float]:
+    """歩数と現在体重から消費カロリーを概算する。
+
+    【計算式】
+        kcal = step_count * weight_kg * 0.0004
+
+        - 1歩あたりの消費カロリーは体重にほぼ比例する
+          （おおよそ 体重(kg) × 0.0004 kcal/歩）
+        - 例: 体重60kgの人が8,000歩 → 60 * 8000 * 0.0004 = 192 kcal
+
+    【仕様】
+        - 歩数が0以下や体重が未指定(None)なら None を返す(表示対象外)
+    """
+    if step_count is None or step_count <= 0 or not weight_kg:
+        return None
+    return round(step_count * float(weight_kg) * 0.0004, 1)
+
+
 def main() -> None:
     """コマンドラインから実行する場合のエントリーポイント。
 

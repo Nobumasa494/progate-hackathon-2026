@@ -32,6 +32,7 @@ import radio_episode_repository
 import radio_service
 import recipe_service
 import suggestion_history_repository
+import target_calculation
 import user_ratings_repository
 import voicevox_client
 import weight_repository
@@ -615,8 +616,16 @@ def record_weight():
     user_id = session["user_id"]
     weight_kg = request.args.get("weight_kg", type=float)
     date_str = request.args.get("date")
+    step_count_str = request.args.get("step_count")
     if weight_kg is None:
         return jsonify({"error": "weight_kg が必要です"}), 400
+
+    step_count = None
+    if step_count_str is not None:
+        try:
+            step_count = int(step_count_str)
+        except ValueError:
+            return jsonify({"error": "step_count は整数で指定してください"}), 400
 
     if date_str:
         try:
@@ -626,7 +635,7 @@ def record_weight():
     else:
         log_date = date.today()
 
-    weight_repository.upsert_weight_log(user_id, weight_kg, log_date)
+    weight_repository.upsert_weight_log(user_id, weight_kg, log_date, step_count)
     return jsonify({"status": "ok"})
 
 
@@ -650,6 +659,20 @@ def delete_weight():
         return jsonify({"error": "date の形式が正しくありません"}), 400
     weight_repository.delete_weight_log_by_date(user_id, log_date)
     return jsonify({"status": "ok"})
+
+
+@app.route("/weight/steps/weekly", methods=["GET"])
+@require_login_api
+def weekly_steps():
+    """今週(月曜起点)の歩数合計と、それによる消費カロリー概算を返す。
+
+    目標画面(goals.html)で「今週の歩数」カードに使う。
+    """
+    user_id = session["user_id"]
+    total_steps = weight_repository.fetch_weekly_steps(user_id)
+    latest_weight = weight_repository.get_latest_weight(user_id)
+    kcal = target_calculation.calc_steps_kcal(total_steps, latest_weight)
+    return jsonify({"total_steps": total_steps, "kcal": kcal})
 
 
 # ---------------------------------------------------------------------------

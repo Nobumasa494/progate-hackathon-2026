@@ -52,8 +52,8 @@ app.py                     ルーティング全体、画面(static/*.html)配�
 recipe_service.py          機能1: AIによる置き換えレシピ提案
 meal_logs_repository.py    機能2: 食事ログのCRUD
 goal_repository.py         機能3: 目標体重・削減カロリー計算
-target_calculation.py      機能3: 計算ロジック(AIを使わない純粋な算術)
-weight_repository.py       機能4: 体重記録のCRUD
+target_calculation.py      機能3: 計算ロジック(AIを使わない純粋な算術)(+歩数→消費kcal計算)
+weight_repository.py       機能4: 体重記録のCRUD(+歩数。週間歩数集計あり)
 latest_suggestions.py      機能1→2の橋渡し(直近の提案をプロセス内メモリで保持)
 auth_service.py            Supabase Authのラッパー(サインアップ/ログイン)
 
@@ -106,6 +106,15 @@ discovery_repository.py    「探すクエスト」: 発見報告(店舗・写�
 ## 「探すクエスト」機能について
 
 置き換え食材を「実際どこで買うか分からない」という後工程の課題に着目し、ゲーム性を持たせた機能。正確なリアルタイム在庫API(スーパー横断)は存在しないため、正確な在庫情報は諦め、ユーザー投稿による集合知(発見報告・写真・位置情報)でカバーする設計にした(`docs/search_quest/README.md`参照)。近隣スーパーの地図表示にはGoogle Maps APIを使う(`/maps-key`でキーを配布)。
+
+## 歩数記録機能について
+
+体重記録画面(`/weight-log`)で体重と一緒に当日の歩数を記録し、目標画面で「今週の歩数合計」と「消費カロリー概算」を表示する機能。
+
+- **新規テーブルは作らず、`weight_logs`テーブルに`step_count`カラムを追加した**。歩数は「日付単位の1行」という体重記録と同一の粒度で記録されるため、別テーブル(`step_logs`)を立てる必要がなく、日付のupsert処理もそのまま使える。
+- **ただし`step_count`カラムの追加はSupabaseダッシュボードで手動実行した**(`alter table weight_logs add column step_count integer not null default 0`)。
+- 歩数→消費カロリーは`target_calculation.py`の`calc_steps_kcal()`(歩数×体重×0.0004)。「AIを使わない純粋な算術」という同ファイルの役割に合うため配置した。**計算結果はDBに保存しない**(導出値であり、体重を直すと不整合になるため)。
+- 週の集計は`weight_repository.fetch_weekly_steps()`で、meal_logsと同じ「Pythonで全件取得して集計」方式(データ量が少ないためpgvector的な追加部品は不要)。
 
 ## 既知の制約・ハマりどころ
 

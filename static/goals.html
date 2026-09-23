@@ -68,6 +68,15 @@
     <div class="streak-cal" id="streak-cal"></div>
   </div>
 
+  <div class="card" id="steps-card">
+    <div class="label" style="font-size:13px;color:var(--ink-dim);margin-bottom:10px;font-weight:700;">今週(月曜起点)の歩数</div>
+    <div class="statrow2">
+      <div class="stat2"><div class="k">今週の歩数合計</div><div class="v" id="weekly-steps">-</div></div>
+      <div class="stat2"><div class="k">消費カロリー(概算)</div><div class="v" id="weekly-steps-kcal">-</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--ink-dim);margin-top:12px;text-align:center;">歩数は<a href="/weight-log">体重記録画面</a>で体重と一緒に記録できます。記録すればするほど目標達成の近道です。</div>
+  </div>
+
   <div class="card">
     <div class="label" style="font-size:13px;color:var(--ink-dim);margin-bottom:10px;font-weight:700;">目標を更新する</div>
     <div class="inputrow">
@@ -265,8 +274,22 @@ document.getElementById("update-btn").addEventListener("click", async () => {
   toast.classList.add("show");
 });
 
+async function loadSteps() {
+  try {
+    const res = await fetch("/weight/steps/weekly");
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById("weekly-steps").textContent = fmt(data.total_steps) + "歩";
+    document.getElementById("weekly-steps-kcal").textContent =
+      data.kcal !== null && data.kcal !== undefined ? `${fmt(data.kcal)}kcal` : "体重記録後に表示";
+  } catch (e) {
+    // 歩数が取れなくても、目標画面自体は使えるようにする
+  }
+}
+
 loadGoal();
 loadStreak();
+loadSteps();
 </script>
 </body>
 </html>

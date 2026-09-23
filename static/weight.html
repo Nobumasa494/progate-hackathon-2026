@@ -53,9 +53,10 @@
 
   <div class="card">
     <div class="today-row">
-      <div class="inputrow" style="margin:0;">
+      <div class="inputrow" style="margin:0;flex-wrap:wrap;">
         <input class="input" id="weight-date" type="date" style="max-width:150px;">
         <input class="input" id="weight-input" type="number" step="0.1" placeholder="例: 65.0" style="max-width:110px;">
+        <input class="input" id="step-input" type="number" min="0" placeholder="歩数 (任意)" style="max-width:150px;">
         <button class="btn ai-glow-btn" id="record-btn">記録する</button>
       </div>
     </div>
@@ -83,6 +84,7 @@ renderNav("goal");
 
 const dateInput = document.getElementById("weight-date");
 const input = document.getElementById("weight-input");
+const stepInput = document.getElementById("step-input");
 const button = document.getElementById("record-btn");
 const deleteButton = document.getElementById("delete-btn");
 const historyEl = document.getElementById("history");
@@ -126,8 +128,17 @@ async function loadChart() {
     weightEl.className = "history-weight";
     weightEl.textContent = `${log.weight_kg}kg`;
 
+    const stepCount = log.step_count || 0;
+    const stepsEl = document.createElement("span");
+    stepsEl.className = "history-steps";
+    stepsEl.style.cssText = "color:var(--ink-dim);font-size:12px;";
+    stepsEl.textContent = stepCount > 0
+      ? `${stepCount.toLocaleString()}歩・約${Math.round(stepCount * log.weight_kg * 0.0004)}kcal`
+      : "歩数未記録";
+
     row.appendChild(dateEl);
     row.appendChild(weightEl);
+    row.appendChild(stepsEl);
 
     if (prev) {
       const diff = Math.round((log.weight_kg - prev.weight_kg) * 10) / 10;
@@ -145,8 +156,14 @@ async function record() {
   const weight = parseFloat(input.value);
   const logDate = dateInput.value;
   if (!weight || !logDate) return;
-  await fetch(`/weight?weight_kg=${weight}&date=${logDate}`, { method: "POST" });
+  let url = `/weight?weight_kg=${weight}&date=${logDate}`;
+  const stepCount = stepInput.value.trim();
+  if (stepCount !== "") {
+    url += `&step_count=${stepCount}`;
+  }
+  await fetch(url, { method: "POST" });
   input.value = "";
+  stepInput.value = "";
   loadChart();
   dateInput.value = new Date().toISOString().slice(0, 10);
 }
