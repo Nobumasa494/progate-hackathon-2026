@@ -16,13 +16,16 @@
 | ログイン / 新規登録 | `/login` `/signup` | アカウントごとにデータを管理する |
 | 深夜ラジオ(実験的) | `/radio` | その日の記録をもとに、AIが2人のDJの掛け合いラジオを生成・再生する |
 | みんなのラジオ(実験的) | `/discover` | 他のユーザーが共有したラジオを、匿名・無限スクロールで聴ける |
+| ランキング | `/leaderboard` | 置き換え成功率をもとにしたレーティング・順位を見る |
+| 探すクエスト | `/quest` | 提案された置き換え食材を、近隣のお店で見つけて写真付きで発見報告する(地図表示) |
 
 ## 使用技術
 
 - **Flask** — Webアプリのフレームワーク(画面・APIともにこれ1つで配信)
-- **Supabase** — データベース(体重・目標・食事ログ・ラジオ)・Storage(ラジオの音声)・認証(Supabase Auth)
-- **OpenAI API** — 置き換えレシピ・ラジオ台本の生成(`gpt-4o-mini`)
+- **Supabase** — データベース(体重・目標・食事ログ・ラジオ・提案履歴・クイズ・レーティング・発見報告)・Storage(ラジオの音声、発見報告の写真)・認証(Supabase Auth)
+- **OpenAI API** — 置き換えレシピ・ラジオ台本の生成(`gpt-4o-mini`)、提案の多様性チェック用のEmbeddings
 - **VOICEVOX** — 深夜ラジオ機能(実験的)の音声合成。ローカルでVOICEVOXエンジンを起動しておく必要がある
+- **Google Maps API** — 探すクエスト機能の地図表示
 
 ## 機能同士の連携
 
@@ -32,6 +35,9 @@
 - **体重記録 → 目標**: 目標の計算に使う「現在の体重」は、体重記録の最新値を自動で使う(手入力しない)
 - **目標 → レシピ提案**: 目標の削減ペースをAIへの指示に反映する。ただし安全のため、AIに伝える削減量には上限(`MAX_SAFE_DAILY_REDUCTION_KCAL`)を設けている
 - **食事ログ → 深夜ラジオ(実験的)**: 食事ログを記録すると、その内容(と「今日DJたちに教えたいこと」)をもとに、裏側でラジオ台本を自動生成する
+- **レシピ提案 → 提案の多様性チェック**: 提案時に過去の提案履歴とEmbeddingsで比較し、同じような提案に偏らないようにする
+- **食事ログ → レーティング**: `did_replace`(置き換えに成功したか)の実績をもとに、週単位でレーティングを更新する
+- **レシピ提案 → 探すクエスト**: 提案された置き換え食材をもとに、近隣のお店を探して発見報告できる
 
 詳しい設計の経緯は、開発中にまとめた設計メモを参照(社内共有のみ)。
 
@@ -40,9 +46,10 @@
 ### 1. 必要なもの
 
 - Python 3.12以上
-- Supabaseプロジェクト(`goals`・`meal_logs`・`weight_logs`・`radio_episodes`・`radio_memories`テーブルと、非公開Storageバケット`radio-audio`を作成済みのもの)
+- Supabaseプロジェクト(`goals`・`meal_logs`・`weight_logs`・`radio_episodes`・`radio_memories`・`suggestion_history`・`quiz_results`・`user_ratings`・`discoveries`テーブルと、非公開Storageバケット`radio-audio`・公開Storageバケット`discovery-photos`を作成済みのもの)
 - OpenAI APIキー
 - (深夜ラジオ機能を使う場合)ローカルで起動したVOICEVOXエンジン
+- (探すクエスト機能を使う場合)Google Maps APIキー
 
 ### 2. 環境変数を設定する
 
@@ -59,6 +66,7 @@ cp .env.example .env
 | `SUPABASE_KEY` | Supabaseのsecret key(サーバー側専用。ブラウザには渡さない) |
 | `FLASK_SECRET_KEY` | ログインセッション用の秘密鍵。`python -c "import secrets; print(secrets.token_hex(32))"` で生成する |
 | `VOICEVOX_URL` | (任意)VOICEVOXエンジンのURL。未設定なら`http://localhost:50021`を使う |
+| `GOOGLE_MAPS_API_KEY` | (任意)探すクエスト機能の地図表示用。未設定でも他の機能は動く |
 
 ### 3. 依存パッケージをインストール
 

@@ -35,6 +35,13 @@
     0%,100%{transform:translateY(0) rotate(-2deg);}
     50%{transform:translateY(-10px) rotate(2deg);}
   }
+
+  .streak-cal-head, .streak-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;}
+  .streak-cal-head{margin-bottom:6px;font-size:11px;color:var(--ink-dim);font-weight:700;}
+  .streak-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:12px;color:var(--ink-dim);background:var(--surface-2);}
+  .streak-day.empty{background:none;}
+  .streak-day.done{background:var(--primary);color:#fff;font-weight:800;}
+  .streak-day.today{border:1.5px solid var(--primary);}
 </style>
 </head>
 <body>
@@ -55,6 +62,12 @@
 
   <div id="goal-area"><p class="loading">読み込み中...</p></div>
 
+  <div class="card" id="streak-card">
+    <div id="streak-count" style="font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:18px;color:var(--primary-dark);text-align:center;margin-bottom:10px;"></div>
+    <div class="streak-cal-head" id="streak-cal-head"></div>
+    <div class="streak-cal" id="streak-cal"></div>
+  </div>
+
   <div class="card">
     <div class="label" style="font-size:13px;color:var(--ink-dim);margin-bottom:10px;font-weight:700;">目標を更新する</div>
     <div class="inputrow">
@@ -72,6 +85,17 @@
 <script src="nav.js"></script>
 <script>
 renderNav("goal");
+
+function el(tag, props = {}, children = []) {
+  const node = document.createElement(tag);
+  Object.entries(props).forEach(([k, v]) => {
+    if (k === "className") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else node.setAttribute(k, v);
+  });
+  children.forEach(c => node.appendChild(c));
+  return node;
+}
 
 function fmt(n) {
   return Math.round(n).toLocaleString("ja-JP");
@@ -169,6 +193,47 @@ async function loadProgress() {
   }
 }
 
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+function renderStreakCalendar(streakDays, dateSet) {
+  const head = document.getElementById("streak-cal-head");
+  head.innerHTML = WEEKDAY_LABELS.map(d => `<div>${d}</div>`).join("");
+
+  const countEl = document.getElementById("streak-count");
+  countEl.textContent = streakDays > 0 ? `🔥 ${streakDays}日連続で置き換え中!` : "まだ連続記録がありません";
+
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth(); // 0-indexed
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = today.toISOString().slice(0, 10);
+
+  const cal = document.getElementById("streak-cal");
+  cal.innerHTML = "";
+  for (let i = 0; i < firstDay.getDay(); i++) {
+    cal.appendChild(el("div", { className: "streak-day empty" }));
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const classes = ["streak-day"];
+    if (dateSet.has(dateStr)) classes.push("done");
+    if (dateStr === todayStr) classes.push("today");
+    cal.appendChild(el("div", { className: classes.join(" "), text: `${d}` }));
+  }
+}
+
+async function loadStreak() {
+  try {
+    const res = await fetch("/streak");
+    if (!res.ok) return;
+    const data = await res.json();
+    renderStreakCalendar(data.streak_days, new Set(data.dates));
+  } catch (e) {
+    // 取れなくても目標画面自体は使えるようにする(致命的エラーにしない)
+  }
+}
+
 async function loadGoal() {
   try {
     const res = await fetch("/goals/latest");
@@ -201,6 +266,7 @@ document.getElementById("update-btn").addEventListener("click", async () => {
 });
 
 loadGoal();
+loadStreak();
 </script>
 </body>
 </html>

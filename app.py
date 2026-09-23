@@ -39,7 +39,6 @@ import weight_repository
 app = Flask(__name__, static_folder="static", static_url_path="")
 app.secret_key = os.environ["FLASK_SECRET_KEY"]
 
-
 def require_login_page(view):
     """画面(HTML)用: ログインしていなければ /login に飛ばす。"""
     @wraps(view)
@@ -523,6 +522,18 @@ def meal_logs_weekly_summary():
     user_id = session["user_id"]
     summary = meal_logs_repository.fetch_weekly_summary(user_id)
     return jsonify(summary)
+
+
+@app.route("/streak", methods=["GET"])
+@require_login_api
+def get_streak():
+    """連続で置き換えた日数と、直近の日付一覧を返す(目標画面のカレンダー表示用)。"""
+    user_id = session["user_id"]
+    dates = meal_logs_repository.fetch_replace_dates(user_id)
+    return jsonify({
+        "streak_days": meal_logs_repository.calculate_streak_days(dates),
+        "dates": sorted(dates),
+    })
 
 
 @app.route("/progress", methods=["GET"])
