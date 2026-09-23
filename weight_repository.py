@@ -6,8 +6,8 @@
     created_at : timestamp (自動記録)
 
 【使い方】
-    from weight_repository import insert_weight_log, get_weight_logs, get_latest_weight
-"""
+    from weight_repository import upsert_weight_log, get_weight_logs, get_latest_weight
+    """
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import os
 import threading
 from pathlib import Path
 from typing import Optional
+from datetime import date, datetime, timedelta
 
 try:
     from dotenv import load_dotenv
@@ -56,13 +57,40 @@ def get_client(url: Optional[str] = None, key: Optional[str] = None) -> Client:
     return create_client(url or os.environ["SUPABASE_URL"], key or os.environ["SUPABASE_KEY"])
 
 
-def insert_weight_log(user_id: str, weight_kg: float, client: Optional[Client] = None) -> None:
-    client = client or get_client()
-    client.table("weight_logs").insert({
-        "user_id": user_id,
-        "weight_kg": weight_kg,
-    }).execute()
 
+
+
+def upsert_weight_log(
+    user_id: str, weight_kg: float, log_date: date, client: Optional[Client] = None
+) -> None:
+    """指定した日付の体重を記録する。
+
+    同じ日付の記録が既にあれば、その値を上書きする(置き換え)。
+    無ければ、その日付で新しい行を追加する。
+    """
+    client = client or get_client()
+    start = datetime.combine(log_date, datetime.min.time())
+    end = start + timedelta(days=1)
+
+    existing = (
+        client.table("weight_logs")
+        .select("id")
+        .eq("user_id", user_id)
+        .gte("created_at", start.isoformat())
+        .lt("created_at", end.isoformat())
+        .execute()
+    )
+    rows = existing.data
+
+    if rows:
+        target_id = rows[0]["id"]
+        client.table("weight_logs").update({"weight_kg": weight_kg}).eq("id", target_id).execute()
+    else:
+        client.table("weight_logs").insert({
+            "user_id": user_id,
+            "weight_kg": weight_kg,
+            "created_at": start.isoformat(),
+        }).execute()
 
 def get_weight_logs(user_id: str, client: Optional[Client] = None) -> list[dict]:
     """そのユーザーの体重記録を、記録した順（古い順）に返す。"""
@@ -71,10 +99,22 @@ def get_weight_logs(user_id: str, client: Optional[Client] = None) -> list[dict]
         client.table("weight_logs")
         .select("*")
         .eq("user_id", user_id)
-        .order("id")
+        .order("created_at")
         .execute()
     )
     return response.data
+
+def delete_weight_log_by_date(
+    user_id: str, log_date: date, client: Optional[Client] = None
+) -> None:
+    """指定した日付の体重記録を削除する(その日の記録が無ければ何もしない)。"""
+    client = client or get_client()
+    start = datetime.combine(log_date, datetime.min.time())
+    end = start + timedelta(days=1)
+
+    client.table("weight_logs").delete().eq("user_id", user_id).gte(
+        "created_at", start.isoformat()
+    ).lt("created_at", end.isoformat()).execute()
 
 
 def get_latest_weight(user_id: str, client: Optional[Client] = None) -> Optional[float]:
@@ -87,7 +127,7 @@ def get_latest_weight(user_id: str, client: Optional[Client] = None) -> Optional
         client.table("weight_logs")
         .select("weight_kg")
         .eq("user_id", user_id)
-        .order("id", desc=True)
+        .order("created_at", desc=True)
         .limit(1)
         .execute()
     )
@@ -95,10 +135,3 @@ def get_latest_weight(user_id: str, client: Optional[Client] = None) -> Optional
     return float(rows[0]["weight_kg"]) if rows else None
 
 
-def delete_latest_weight_log(user_id: str, client: Optional[Client] = None) -> None:
-    client = client or get_client()
-    logs = get_weight_logs(user_id, client)
-    if not logs:
-        return
-    latest_id = logs[-1]["id"]
-    client.table("weight_logs").delete().eq("id", latest_id).execute()

@@ -9,7 +9,7 @@
 """
 
 from __future__ import annotations
-
+from datetime import date
 import os
 from functools import wraps
 
@@ -614,9 +614,19 @@ def create_goal():
 def record_weight():
     user_id = session["user_id"]
     weight_kg = request.args.get("weight_kg", type=float)
+    date_str = request.args.get("date")
     if weight_kg is None:
         return jsonify({"error": "weight_kg が必要です"}), 400
-    weight_repository.insert_weight_log(user_id, weight_kg)
+
+    if date_str:
+        try:
+            log_date = date.fromisoformat(date_str)
+        except ValueError:
+            return jsonify({"error": "date の形式が正しくありません"}), 400
+    else:
+        log_date = date.today()
+
+    weight_repository.upsert_weight_log(user_id, weight_kg, log_date)
     return jsonify({"status": "ok"})
 
 
@@ -627,11 +637,18 @@ def list_weight():
     return jsonify(weight_repository.get_weight_logs(user_id))
 
 
-@app.route("/weight/latest", methods=["DELETE"])
+@app.route("/weight", methods=["DELETE"])
 @require_login_api
-def delete_latest_weight():
+def delete_weight():
     user_id = session["user_id"]
-    weight_repository.delete_latest_weight_log(user_id)
+    date_str = request.args.get("date")
+    if not date_str:
+        return jsonify({"error": "date が必要です"}), 400
+    try:
+        log_date = date.fromisoformat(date_str)
+    except ValueError:
+        return jsonify({"error": "date の形式が正しくありません"}), 400
+    weight_repository.delete_weight_log_by_date(user_id, log_date)
     return jsonify({"status": "ok"})
 
 
