@@ -13,11 +13,11 @@
 <style>
   /* この画面だけ、背景をイラストに差し替える(オーバーレイなし、画像そのまま) */
   body{
-    background-image:url("images/profile-bg.jpg");
+    background-image:linear-gradient(rgba(243,248,244,0.55), rgba(243,248,244,0.55)), url("images/profile-bg.jpg");
     background-repeat:no-repeat;
-    background-size:cover;
-    background-position:center;
-    background-attachment:fixed;
+    background-size:auto, cover;
+    background-position:center, center;
+    background-attachment:fixed, fixed;
   }
   .label{font-size:13px;color:var(--ink-dim);margin-bottom:10px;font-weight:700;}
   select.input{width:100%;margin-bottom:14px;}
