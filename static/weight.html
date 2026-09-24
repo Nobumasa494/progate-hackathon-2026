@@ -14,15 +14,37 @@
 <style>
   .chart-box{position:relative;height:220px;}
   .today-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;}
-  .today-value{font-family:'Zen Maru Gothic',sans-serif;font-weight:800;font-size:34px;color:var(--primary-dark);}
-  .today-value span{font-size:16px;font-weight:600;color:var(--ink-dim);}
-  .history-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;}
+  /* 最近の記録: 4列固定グリッド。行ごとに要素数が変わって列がズレるのを防ぐ */
+  .history-head,
+  .history-row{
+    display:grid;
+    grid-template-columns:76px 1fr 1.4fr 72px;
+    gap:8px;
+    align-items:center;
+    padding:9px 0;
+    border-bottom:1px solid var(--border);
+    font-size:14px;
+  }
+  .history-head{
+    padding-bottom:6px;
+    font-size:11px;
+    font-weight:700;
+    color:var(--ink-dim);
+    border-bottom:1.5px solid var(--border);
+  }
   .history-row:last-child{border-bottom:none;}
+  .history-head .c-weight,
+  .history-row .c-weight{text-align:left;}
+  .history-head .c-delta,
+  .history-row .c-delta{text-align:right;}
   .history-date{color:var(--ink-dim);}
   .history-weight{font-weight:700;}
-  .history-delta{font-weight:700;font-size:13px;}
+  .history-steps{color:var(--ink-dim);font-size:12px;line-height:1.3;}
+  .history-steps b{display:block;font-size:13px;color:var(--ink);font-weight:700;}
+  .history-delta{font-weight:700;font-size:13px;text-align:right;}
   .history-delta.down{color:var(--down);}
   .history-delta.up{color:var(--up);}
+  .history-delta.none{color:var(--ink-dim);font-weight:400;}
 
   .header-area{position:relative;padding-right:78px;min-height:76px;background:rgba(255,255,255,0.7);border-radius:16px;padding-top:10px;padding-bottom:10px;margin-bottom:14px;}
   .header-area p{padding-left:12px;}
@@ -72,6 +94,12 @@
 
   <div class="card">
     <h3 class="sec" style="margin-top:0;">最近の記録</h3>
+    <div class="history-head">
+      <span>日付</span>
+      <span class="c-weight">体重</span>
+      <span>歩数</span>
+      <span class="c-delta">前回比</span>
+    </div>
     <div id="history"></div>
   </div>
 </div>
@@ -121,32 +149,42 @@ async function loadChart() {
     row.className = "history-row";
 
     const dateEl = document.createElement("span");
-    dateEl.className = "history-date";
+    dateEl.className = "history-date c-date";
     dateEl.textContent = new Date(log.created_at).toLocaleDateString();
 
     const weightEl = document.createElement("span");
-    weightEl.className = "history-weight";
+    weightEl.className = "history-weight c-weight";
     weightEl.textContent = `${log.weight_kg}kg`;
 
     const stepCount = log.step_count || 0;
     const stepsEl = document.createElement("span");
-    stepsEl.className = "history-steps";
-    stepsEl.style.cssText = "color:var(--ink-dim);font-size:12px;";
-    stepsEl.textContent = stepCount > 0
-      ? `${stepCount.toLocaleString()}歩・約${Math.round(stepCount * log.weight_kg * 0.0004)}kcal`
-      : "歩数未記録";
+    stepsEl.className = "history-steps c-steps";
+    if (stepCount > 0) {
+      const stepsB = document.createElement("b");
+      stepsB.textContent = `${stepCount.toLocaleString()}歩`;
+      const kcalSpan = document.createElement("span");
+      kcalSpan.textContent = `約${Math.round(stepCount * log.weight_kg * 0.0004)}kcal`;
+      stepsEl.appendChild(stepsB);
+      stepsEl.appendChild(kcalSpan);
+    } else {
+      stepsEl.textContent = "未記録";
+    }
+
+    const deltaEl = document.createElement("span");
+    deltaEl.className = "history-delta c-delta";
+    if (prev) {
+      const diff = Math.round((log.weight_kg - prev.weight_kg) * 10) / 10;
+      deltaEl.classList.add(diff <= 0 ? "down" : "up");
+      deltaEl.textContent = (diff > 0 ? "+" : "") + diff + "kg";
+    } else {
+      deltaEl.classList.add("none");
+      deltaEl.textContent = "-";
+    }
 
     row.appendChild(dateEl);
     row.appendChild(weightEl);
     row.appendChild(stepsEl);
-
-    if (prev) {
-      const diff = Math.round((log.weight_kg - prev.weight_kg) * 10) / 10;
-      const deltaEl = document.createElement("span");
-      deltaEl.className = "history-delta " + (diff <= 0 ? "down" : "up");
-      deltaEl.textContent = (diff > 0 ? "+" : "") + diff + "kg";
-      row.appendChild(deltaEl);
-    }
+    row.appendChild(deltaEl);
 
     historyEl.appendChild(row);
   });
