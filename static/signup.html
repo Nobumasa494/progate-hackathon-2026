@@ -38,6 +38,7 @@
 
     <input class="form-control" id="email" type="email" placeholder="メールアドレス">
     <input class="form-control" id="password" type="password" placeholder="パスワード">
+    <input class="form-control" id="password-confirm" type="password" placeholder="パスワード(確認)">
     <input class="form-control" id="favorite-things" type="text" placeholder="好きなこと(任意・例: 映画鑑賞)">
     <button class="btn ai-glow-btn w-100 fw-bold py-2" id="signup-btn" style="border-radius:999px;">登録する</button>
 
@@ -52,6 +53,7 @@
 document.getElementById("signup-btn").addEventListener("click", async () => {
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
+  const passwordConfirm = document.getElementById("password-confirm").value;
   const favoriteThings = document.getElementById("favorite-things").value.trim();
   const errorEl = document.getElementById("error");
   const noticeEl = document.getElementById("notice");
@@ -59,6 +61,12 @@ document.getElementById("signup-btn").addEventListener("click", async () => {
   noticeEl.style.display = "none";
 
   if (!email || !password) return;
+
+  if (password !== passwordConfirm) {
+    errorEl.textContent = "パスワードが一致しません";
+    errorEl.style.display = "block";
+    return;
+  }
 
   const res = await fetch("/signup", {
     method: "POST",
