@@ -3,6 +3,9 @@
 食べたい料理名を入力すると、AIがカロリーを抑えた置き換えレシピを提案するアプリです。
 実際に食べた内容・体重・目標を記録し、目標に応じて提案の内容も自動で調整されます。
 
+<img width="950" height="449" alt="image" src="https://github.com/user-attachments/assets/eeb6beb9-62f5-4654-9bdd-d7aacf43c096" />
+
+
 ## 機能
 
 | 画面 | URL | できること |
